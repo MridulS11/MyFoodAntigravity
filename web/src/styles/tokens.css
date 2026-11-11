@@ -1,0 +1,45 @@
+:root {
+  /* Goodly Brand & Editorial Surfaces */
+  --bg-canvas: #fcf9f0;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f5f0e2;
+  --bg-muted: #efe9d8;
+
+  /* Brand Accents (from Reference UI) */
+  --accent-gold: #dec146;
+  --accent-gold-hover: #cfaf32;
+  --accent-gold-soft: #f7ecc1;
+  --accent-sage: #5f8e63;
+  --accent-mint: #cbead0;
+  --accent-mint-soft: #dff3e2;
+
+  /* Typography & Ink */
+  --ink-primary: #1e1f1c;
+  --ink-secondary: #5e5d57;
+  --ink-muted: #8a8880;
+  --ink-on-gold: #1e1f1c;
+  --ink-on-dark: #fcf9f0;
+
+  /* Borders & Dividers */
+  --border-hairline: #e8e3d5;
+  --border-strong: #d5cebc;
+
+  /* Semantic Status */
+  --status-success: #2e7d32;
+  --status-success-bg: #e8f5e9;
+  --status-warning: #d97706;
+  --status-warning-bg: #fef3c7;
+  --status-danger: #c62828;
+  --status-danger-bg: #fdecea;
+  --status-info: #2563eb;
+  --status-info-bg: #eff6ff;
+
+  /* Radii & Shadows */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 1px 2px rgba(30, 31, 28, 0.04), 0 4px 14px rgba(30, 31, 28, 0.04);
+  --shadow-float: 0 8px 28px rgba(30, 31, 28, 0.12);
+}

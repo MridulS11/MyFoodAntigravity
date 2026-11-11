@@ -1,0 +1,103 @@
+name: Goodly Platform CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend Lint, Build, Vitest & Playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck & ESLint
+        run: |
+          npx tsc --noEmit
+          npm run lint
+
+      - name: Vitest unit tests
+        run: npm run test:unit
+
+      - name: Next.js production build
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report & screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 14
+
+  backend:
+    name: Go Backend Vet, Build & Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: goodly
+          POSTGRES_PASSWORD: goodly_secret
+          POSTGRES_DB: goodly_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U goodly -d goodly_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+
+      - name: Run unit & integration tests
+        env:
+          DATABASE_URL: postgres://goodly:goodly_secret@localhost:5432/goodly_db?sslmode=disable
+          REDIS_ADDR: localhost:6379
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Build Go binaries
+        run: |
+          go build ./cmd/api
+          go build ./cmd/ws
+          go build ./cmd/worker
+          go build ./cmd/seed

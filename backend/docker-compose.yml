@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: goodly-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-goodly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-goodly_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-goodly_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - goodly_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goodly} -d ${POSTGRES_DB:-goodly_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: goodly-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - goodly_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: goodly-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-goodly}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-goodly_secret}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - goodly_rmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    container_name: goodly-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m
+      - bootstrap.memory_lock=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - goodly_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  goodly_pg_data:
+  goodly_redis_data:
+  goodly_rmq_data:
+  goodly_opensearch_data:

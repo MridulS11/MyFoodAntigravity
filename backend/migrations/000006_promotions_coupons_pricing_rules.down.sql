@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS commission_configs CASCADE;
+DROP TABLE IF EXISTS delivery_charge_rules CASCADE;
+DROP TABLE IF EXISTS coupons CASCADE;
+DROP TABLE IF EXISTS promotional_campaigns CASCADE;

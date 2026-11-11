@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS service_zones CASCADE;
+DROP TABLE IF EXISTS customer_addresses CASCADE;
+DROP TABLE IF EXISTS customer_profiles CASCADE;

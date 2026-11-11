@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS order_status_history CASCADE;
+DROP TABLE IF EXISTS order_item_customizations CASCADE;
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS outlet_penalties CASCADE;
+DROP TABLE IF EXISTS coupon_usages CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;

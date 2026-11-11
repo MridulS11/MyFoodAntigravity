@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: Goodly Food Delivery Platform API
+  version: 1.0.0
+  description: |
+    Authoritative REST & WebSocket API specification for the Goodly multi-outlet marketplace mediator platform (India INR locale).
+    Supports Customer, Outlet Owner / Branch Manager, Delivery Partner, Customer Care, and Platform Admin portals.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Go Modular Monolith API
+security:
+  - BearerAuth: []
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+    RegisterRequest:
+      type: object
+      required: [full_name, email, phone, password, role]
+      properties:
+        full_name: { type: string, example: "Ananya Sharma" }
+        email: { type: string, format: email, example: "ananya@goodly.local" }
+        phone: { type: string, example: "+91-98450-10101" }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [CUSTOMER, OUTLET_OWNER, DELIVERY_PARTNER] }
+    LoginRequest:
+      type: object
+      required: [email_or_phone, password]
+      properties:
+        email_or_phone: { type: string, example: "alice@goodly.local" }
+        password: { type: string, example: "password123" }
+    AddressRequest:
+      type: object
+      required: [label, recipient_name, recipient_phone, address_line1, city, state, postal_code, lat, lng]
+      properties:
+        label: { type: string, enum: [Home, Work, Other] }
+        recipient_name: { type: string }
+        recipient_phone: { type: string }
+        address_line1: { type: string }
+        city: { type: string, example: "Bengaluru" }
+        state: { type: string, example: "KA" }
+        postal_code: { type: string, example: "560038" }
+        country_code: { type: string, default: "IN" }
+        lat: { type: number, example: 12.9784 }
+        lng: { type: number, example: 77.6408 }
+        is_default: { type: boolean }
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register Customer, Outlet Owner, or Delivery Partner
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created user and OTP verification challenge
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with email/phone and Argon2id password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Returns JWT access token, user metadata, and HttpOnly cookies
+  /auth/otp/send:
+    post:
+      tags: [Auth]
+      summary: Send 6-digit OTP verification challenge
+      security: []
+      responses:
+        '200':
+          description: Challenge issued
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify 6-digit OTP
+      security: []
+      responses:
+        '200':
+          description: Verified
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token (with family reuse revocation)
+      security: []
+      responses:
+        '200':
+          description: Fresh token pair issued
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke active session in PostgreSQL and Redis
+      responses:
+        '200':
+          description: Logged out
+  /auth/ws-ticket:
+    post:
+      tags: [Auth]
+      summary: Issue single-use 30-second WebSocket handshake ticket
+      responses:
+        '200':
+          description: Returns ticket nonce
+  /customers/me:
+    get:
+      tags: [Customers]
+      summary: Fetch authenticated profile
+      responses:
+        '200':
+          description: Customer profile
+    patch:
+      tags: [Customers]
+      summary: Update display name or dietary preferences
+      responses:
+        '200':
+          description: Updated profile
+  /customers/me/addresses:
+    get:
+      tags: [Customers]
+      summary: List saved addresses with live PostGIS serviceability evaluation
+      responses:
+        '200':
+          description: List of saved addresses
+    post:
+      tags: [Customers]
+      summary: Save delivery address with PostGIS ST_MakePoint & ST_Covers check
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+      responses:
+        '201':
+          description: Address created
+  /customers/me/addresses/{id}:
+    patch:
+      tags: [Customers]
+      summary: Set default address (enforces ownership)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Customers]
+      summary: Archive address (enforces ownership)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Archived
+  /customers/me/favorites:
+    get:
+      tags: [Customers]
+      summary: List favorite restaurant IDs
+      responses:
+        '200':
+          description: List of restaurant IDs
+  /customers/me/favorites/{restaurantId}:
+    post:
+      tags: [Customers]
+      summary: Add restaurant to favorites
+      parameters:
+        - in: path
+          name: restaurantId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Added
+    delete:
+      tags: [Customers]
+      summary: Remove restaurant from favorites
+      parameters:
+        - in: path
+          name: restaurantId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Removed
+  /payments/initiate:
+    post:
+      tags: [Payments]
+      summary: Initiate payment session (Razorpay or configured mock gateway) for an online order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id:
+                  type: string
+      responses:
+        '200':
+          description: Gateway order session created
+  /payments/verify:
+    post:
+      tags: [Payments]
+      summary: Verify client Razorpay checkout callback HMAC signature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
+              properties:
+                razorpay_order_id:
+                  type: string
+                razorpay_payment_id:
+                  type: string
+                razorpay_signature:
+                  type: string
+      responses:
+        '200':
+          description: Payment signature verified and order confirmed
+  /payments/webhooks/{provider}:
+    post:
+      tags: [Payments]
+      summary: Receive idempotent HMAC-verified payment gateway webhooks
+      security: []
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [razorpay]
+      responses:
+        '200':
+          description: Webhook processed or deduplicated
+  /payments/orders/{orderId}:
+    get:
+      tags: [Payments]
+      summary: Fetch payment attempts and refund records for an order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment and refund history
+  /admin/refunds:
+    post:
+      tags: [Admin, Payments]
+      summary: Issue an idempotent full or partial refund (requires refunds:approve permission)
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, amount_minor, reason_code]
+              properties:
+                order_id:
+                  type: string
+                amount_minor:
+                  type: integer
+                reason_code:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Refund processed and double-entry ledger recorded
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Fetch current authenticated user with live roles & granular permissions
+      responses:
+        '200':
+          description: Current user profile
+  /auth/invitations:
+    get:
+      tags: [Auth]
+      summary: List all Outlet & Admin invitations matched to current user's email or phone
+      responses:
+        '200':
+          description: List of invitations
+  /auth/invitations/{kind}/{id}/respond:
+    post:
+      tags: [Auth]
+      summary: Accept or decline a PLATFORM or OUTLET invitation (sets status awaiting final approval)
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema: { type: string, enum: [PLATFORM, OUTLET] }
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Invitation response recorded
+  /service-zones:
+    get:
+      tags: [Discovery]
+      summary: List active service zones for restaurant & courier onboarding
+      security: []
+      responses:
+        '200':
+          description: List of service zones
+  /outlets/roles:
+    get:
+      tags: [Outlets]
+      summary: List custom outlet roles owned by the authenticated outlet owner
+      responses:
+        '200':
+          description: Custom outlet roles
+    post:
+      tags: [Outlets]
+      summary: Create a custom outlet role with granular permissions
+      responses:
+        '201':
+          description: Role created
+  /outlets/{outletId}/staff/{assignmentId}/approve:
+    post:
+      tags: [Outlets]
+      summary: Approve an accepted outlet staff invitation (requires invitee acceptance first)
+      parameters:
+        - in: path
+          name: outletId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: assignmentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Outlet access activated
+  /delivery/me:
+    get:
+      tags: [Delivery]
+      summary: Get courier onboarding status, pending warning state, and availability
+      responses:
+        '200':
+          description: Courier profile & verification state
+  /delivery/onboarding:
+    post:
+      tags: [Delivery]
+      summary: Submit delivery partner vehicle & KYC documents for admin approval
+      responses:
+        '201':
+          description: Courier KYC submitted
+  /delivery/me/availability:
+    patch:
+      tags: [Delivery]
+      summary: Toggle courier online/offline status (blocked 403 if KYC verification pending)
+      responses:
+        '200':
+          description: Availability updated
+  /admin/users/{userId}:
+    delete:
+      tags: [Admin]
+      summary: Delete a user account permanently (or anonymize/soft-delete if immutable order/ledger rows exist; blocks self-deletion)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: User deleted
+        '400':
+          description: Cannot delete active self account
+  /admin/roles:
+    get:
+      tags: [Admin]
+      summary: List system and custom platform admin roles with granular permissions
+      responses:
+        '200':
+          description: Platform roles
+    post:
+      tags: [Admin]
+      summary: Create a custom admin role with granular permission slugs (requires users:manage)
+      responses:
+        '201':
+          description: Custom admin role created
+  /admin/invitations:
+    get:
+      tags: [Admin]
+      summary: List all admin invitations by email or phone
+      responses:
+        '200':
+          description: Admin invitations
+    post:
+      tags: [Admin]
+      summary: Invite an admin user by email ID or contact number with role, optional custom permissions & optional pre_approved auto-activation on accept
+      responses:
+        '201':
+          description: Invitation sent
+  /admin/invitations/{id}/approve:
+    post:
+      tags: [Admin]
+      summary: Final Super Admin approval activating an accepted admin invitation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Admin role granted and activated
+  /{portal}/auth/check-email:
+    post:
+      tags: [Auth]
+      summary: Check if email or phone is already registered or unique (triggers onboarding recommendation)
+      security: []
+      parameters:
+        - in: path
+          name: portal
+          required: true
+          schema: { type: string, enum: [customer, restaurant, delivery, admin] }
+      responses:
+        '200':
+          description: Email uniqueness & onboarding status
+  /{portal}/auth/register:
+    post:
+      tags: [Auth]
+      summary: Open portal registration and OTP email dispatch via Brevo (credentials persist ONLY after OTP verification; admin self-registration grants 0 admin permissions until invited and accepted)
+      security: []
+      parameters:
+        - in: path
+          name: portal
+          required: true
+          schema: { type: string, enum: [customer, restaurant, delivery, admin] }
+      responses:
+        '201':
+          description: Account created and OTP verification email dispatched
+  /{portal}/auth/login:
+    post:
+      tags: [Auth]
+      summary: Portal-isolated sign-in issuing portal-scoped cookies (goodly_{portal}_access_token / _refresh_token)
+      security: []
+      parameters:
+        - in: path
+          name: portal
+          required: true
+          schema: { type: string, enum: [customer, restaurant, delivery, admin] }
+      responses:
+        '200':
+          description: Authenticated portal session + onboarding_required hint
+  /{portal}/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Portal-isolated logout revoking session family and clearing only that portal's cookies
+      parameters:
+        - in: path
+          name: portal
+          required: true
+          schema: { type: string, enum: [customer, restaurant, delivery, admin] }
+      responses:
+        '200':
+          description: Portal logged out
+  /{portal}/auth/me:
+    get:
+      tags: [Auth]
+      summary: Inspect current authenticated session for a specific portal (rejects cross-portal cookies with 401)
+      parameters:
+        - in: path
+          name: portal
+          required: true
+          schema: { type: string, enum: [customer, restaurant, delivery, admin] }
+      responses:
+        '200':
+          description: Active portal user + onboarding state

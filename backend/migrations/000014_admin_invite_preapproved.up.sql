@@ -1,0 +1,2 @@
+ALTER TABLE platform_invitations
+    ADD COLUMN IF NOT EXISTS pre_approved BOOLEAN NOT NULL DEFAULT FALSE;
