@@ -1,3 +1,0 @@
-DROP TABLE IF EXISTS idempotency_records CASCADE;
-DROP TABLE IF EXISTS processed_messages CASCADE;
-DROP TABLE IF EXISTS outbox_events CASCADE;

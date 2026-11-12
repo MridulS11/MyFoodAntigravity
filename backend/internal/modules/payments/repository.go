@@ -17,10 +17,10 @@ import (
 )
 
 var (
-	ErrPaymentNotFound         = errors.New("payment record not found")
-	ErrInvalidSignature        = errors.New("payment gateway signature verification failed")
-	ErrOrderNotPayable         = errors.New("order is no longer awaiting payment")
-	ErrRefundExceedsBalance    = errors.New("refund amount exceeds remaining captured payment balance")
+	ErrPaymentNotFound      = errors.New("payment record not found")
+	ErrInvalidSignature     = errors.New("payment gateway signature verification failed")
+	ErrOrderNotPayable      = errors.New("order is no longer awaiting payment")
+	ErrRefundExceedsBalance = errors.New("refund amount exceeds remaining captured payment balance")
 )
 
 // PaymentSessionDTO contains Razorpay/gateway session parameters for frontend checkout.

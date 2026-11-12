@@ -28,25 +28,25 @@ type ZoneInfo struct {
 
 // FeedRestaurant summarizes an outlet in the customer discovery feed.
 type FeedRestaurant struct {
-	ID                   string   `json:"id"`
-	Slug                 string   `json:"slug"`
-	Name                 string   `json:"name"`
-	Eyebrow              *string  `json:"eyebrow,omitempty"`
-	Tagline              *string  `json:"tagline,omitempty"`
-	Description          *string  `json:"description,omitempty"`
-	Cuisines             []string `json:"cuisines"`
-	HeroImageURL         *string  `json:"hero_image_url,omitempty"`
-	IsAcceptingOrders    bool     `json:"is_accepting_orders"`
-	AvgPrepTimeMinutes   int      `json:"avg_prep_time_minutes"`
-	EstimatedDeliveryMin int      `json:"estimated_delivery_min"`
-	EstimatedDeliveryMax int      `json:"estimated_delivery_max"`
-	DeliveryFeeMinor     int64    `json:"delivery_fee_minor"`
-	MinCartThresholdMinor int64   `json:"min_cart_threshold_minor"`
-	PackagingFeeMinor    int64    `json:"packaging_fee_minor"`
-	Currency             string   `json:"currency"`
-	RatingAverage        float64  `json:"rating_average"`
-	RatingCount          int      `json:"rating_count"`
-	DistanceMeters       int      `json:"distance_meters"`
+	ID                    string   `json:"id"`
+	Slug                  string   `json:"slug"`
+	Name                  string   `json:"name"`
+	Eyebrow               *string  `json:"eyebrow,omitempty"`
+	Tagline               *string  `json:"tagline,omitempty"`
+	Description           *string  `json:"description,omitempty"`
+	Cuisines              []string `json:"cuisines"`
+	HeroImageURL          *string  `json:"hero_image_url,omitempty"`
+	IsAcceptingOrders     bool     `json:"is_accepting_orders"`
+	AvgPrepTimeMinutes    int      `json:"avg_prep_time_minutes"`
+	EstimatedDeliveryMin  int      `json:"estimated_delivery_min"`
+	EstimatedDeliveryMax  int      `json:"estimated_delivery_max"`
+	DeliveryFeeMinor      int64    `json:"delivery_fee_minor"`
+	MinCartThresholdMinor int64    `json:"min_cart_threshold_minor"`
+	PackagingFeeMinor     int64    `json:"packaging_fee_minor"`
+	Currency              string   `json:"currency"`
+	RatingAverage         float64  `json:"rating_average"`
+	RatingCount           int      `json:"rating_count"`
+	DistanceMeters        int      `json:"distance_meters"`
 }
 
 // DishHit pairs a matched dish with its parent outlet.

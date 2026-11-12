@@ -24,6 +24,12 @@ func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	cfg.MinConns = 2
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
+	if cfg.ConnConfig.RuntimeParams == nil {
+		cfg.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	if _, ok := cfg.ConnConfig.RuntimeParams["search_path"]; !ok {
+		cfg.ConnConfig.RuntimeParams["search_path"] = "public,extensions"
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -61,7 +67,9 @@ func WithTx(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) e
 	return nil
 }
 
-// RunMigrations applies unapplied *.up.sql files in lexical order idempotently across concurrent callers.
+// RunMigrations applies unapplied canonical *.sql files (from supabase/migrations) idempotently
+// for local development and integration tests. Production environments must keep AUTO_MIGRATE=false
+// and apply migrations exclusively via Supabase CLI / GitHub Actions.
 func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
 	lockConn, err := pool.Acquire(ctx)
 	if err != nil {
@@ -85,24 +93,42 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, migrationsDir string
 		return fmt.Errorf("ensure schema_migrations: %w", err)
 	}
 
+	var hasSupabaseTracking bool
+	_ = pool.QueryRow(ctx, `SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL`).Scan(&hasSupabaseTracking)
+
 	entries, err := os.ReadDir(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("read migrations dir %q: %w", migrationsDir, err)
 	}
 
-	var upFiles []string
+	var sqlFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
-			upFiles = append(upFiles, entry.Name())
+		name := entry.Name()
+		if !entry.IsDir() && strings.HasSuffix(name, ".sql") && !strings.HasSuffix(name, ".down.sql") {
+			sqlFiles = append(sqlFiles, name)
 		}
 	}
-	sort.Strings(upFiles)
+	sort.Strings(sqlFiles)
 
-	for _, fileName := range upFiles {
+	for _, fileName := range sqlFiles {
 		var alreadyApplied bool
-		err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, fileName).Scan(&alreadyApplied)
+		_, slugWithExt, hasSlug := strings.Cut(fileName, "_")
+		legacyPattern := ""
+		if hasSlug {
+			legacyPattern = "%_" + strings.TrimSuffix(slugWithExt, ".sql") + ".up.sql"
+		}
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM schema_migrations
+				WHERE version = $1 OR ($2 <> '' AND version LIKE $2)
+			)
+		`, fileName, legacyPattern).Scan(&alreadyApplied)
 		if err != nil {
 			return fmt.Errorf("check migration %s: %w", fileName, err)
+		}
+		if !alreadyApplied && hasSupabaseTracking {
+			tsVersion, _, _ := strings.Cut(fileName, "_")
+			_ = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = $1)`, tsVersion).Scan(&alreadyApplied)
 		}
 		if alreadyApplied {
 			continue

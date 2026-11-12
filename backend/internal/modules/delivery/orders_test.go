@@ -40,7 +40,7 @@ func TestDeliveryArrivalOTPAndKDSSmokeIntegration(t *testing.T) {
 		t.Skipf("postgres unavailable for delivery test: %v", err)
 	}
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	zoneID := uuid.NewString()
 	ownerID := uuid.NewString()

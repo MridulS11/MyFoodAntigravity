@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestMigrationsIdempotentUpAndDown(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 
-	migrationsDir := "../../../migrations"
+	migrationsDir := filepath.Join("..", "..", "..", "..", "supabase", "migrations")
 	require.NoError(t, RunMigrations(ctx, pool, migrationsDir))
 	// Idempotent second run must also succeed with zero error
 	require.NoError(t, RunMigrations(ctx, pool, migrationsDir))
@@ -44,25 +45,25 @@ func TestMigrationsIdempotentUpAndDown(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, tableCount, 55)
 
-	// Verify all down migrations syntax exists for every up migration
+	// Verify canonical Supabase migration naming (14-digit timestamp, unique versions, non-empty SQL)
 	entries, err := os.ReadDir(migrationsDir)
 	require.NoError(t, err)
-	var upCount, downCount int
-	var downs []string
+	pattern := regexp.MustCompile(`^(\d{14})_[a-z0-9_]+\.sql$`)
+	seenVersions := make(map[string]bool)
+	var files []string
 	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".up.sql") {
-			upCount++
-		} else if strings.HasSuffix(e.Name(), ".down.sql") {
-			downCount++
-			downs = append(downs, e.Name())
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
 		}
-	}
-	assert.Equal(t, 20, upCount)
-	assert.Equal(t, 20, downCount)
-	sort.Sort(sort.Reverse(sort.StringSlice(downs)))
-	for _, d := range downs {
-		raw, rErr := os.ReadFile(filepath.Join(migrationsDir, d))
+		files = append(files, e.Name())
+		m := pattern.FindStringSubmatch(e.Name())
+		require.Len(t, m, 2, "invalid Supabase migration filename: %s", e.Name())
+		assert.False(t, seenVersions[m[1]], "duplicate migration timestamp version: %s", m[1])
+		seenVersions[m[1]] = true
+		raw, rErr := os.ReadFile(filepath.Join(migrationsDir, e.Name()))
 		require.NoError(t, rErr)
-		assert.NotEmpty(t, string(raw))
+		assert.NotEmpty(t, strings.TrimSpace(string(raw)))
 	}
+	assert.GreaterOrEqual(t, len(files), 20)
+	assert.True(t, sort.StringsAreSorted(files))
 }

@@ -64,7 +64,7 @@ func TestPhase4WebhooksReconciliationRefundsAndLedgersIntegration(t *testing.T) 
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	// Setup isolated test data
 	zoneID := uuid.NewString()
@@ -295,7 +295,7 @@ func TestPhase4WebhooksReconciliationRefundsAndLedgersIntegration(t *testing.T) 
 	var commMinor, settleAmt int64
 	_ = pool.QueryRow(ctx, `SELECT platform_commission_bps, platform_commission_minor, net_payout_minor FROM restaurant_settlements WHERE order_id = $1`, order1ID).Scan(&commBps, &commMinor, &settleAmt)
 	assert.Equal(t, 2000, commBps)
-	assert.Equal(t, int64(9000), commMinor) // 20% of ₹450 (45000 paise)
+	assert.Equal(t, int64(9000), commMinor)  // 20% of ₹450 (45000 paise)
 	assert.Equal(t, int64(38000), settleAmt) // 45000 + 2000 packaging - 9000 commission
 
 	// 7. Automated PENDING Refund Settlement via ProcessPendingRefunds / POST /admin/payments/reconcile

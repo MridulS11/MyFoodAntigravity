@@ -38,16 +38,16 @@ type PricingRules struct {
 
 // Breakdown represents the authoritative minor-unit invoice preview.
 type Breakdown struct {
-	ItemSubtotalMinor        int64 `json:"item_subtotal_minor"`
-	SmallCartFeeMinor        int64 `json:"small_cart_fee_minor"`
-	MinCartThresholdMinor    int64 `json:"min_cart_threshold_minor"`
-	PackagingFeeMinor        int64 `json:"packaging_fee_minor"`
-	DeliveryFeeMinor         int64 `json:"delivery_fee_minor"`
-	PlatformFeeMinor         int64 `json:"platform_fee_minor"`
-	DiscountAmountMinor      int64 `json:"discount_amount_minor"`
-	TaxAmountMinor           int64 `json:"tax_amount_minor"`
-	TipAmountMinor           int64 `json:"tip_amount_minor"`
-	TotalPayableMinor        int64 `json:"total_payable_minor"`
+	ItemSubtotalMinor     int64 `json:"item_subtotal_minor"`
+	SmallCartFeeMinor     int64 `json:"small_cart_fee_minor"`
+	MinCartThresholdMinor int64 `json:"min_cart_threshold_minor"`
+	PackagingFeeMinor     int64 `json:"packaging_fee_minor"`
+	DeliveryFeeMinor      int64 `json:"delivery_fee_minor"`
+	PlatformFeeMinor      int64 `json:"platform_fee_minor"`
+	DiscountAmountMinor   int64 `json:"discount_amount_minor"`
+	TaxAmountMinor        int64 `json:"tax_amount_minor"`
+	TipAmountMinor        int64 `json:"tip_amount_minor"`
+	TotalPayableMinor     int64 `json:"total_payable_minor"`
 }
 
 // ComputeBreakdown calculates authoritative minor-unit totals using exact integer arithmetic.

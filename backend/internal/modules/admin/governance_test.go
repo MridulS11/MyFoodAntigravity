@@ -54,7 +54,7 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	// Isolated service zone & super admin user
 	zoneID := uuid.NewString()
@@ -169,7 +169,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 		require.Equal(t, http.StatusCreated, wOnb.Code, wOnb.Body.String())
 		if i == 0 {
 			var ob struct {
-				Data struct{ ID string `json:"id"` } `json:"data"`
+				Data struct {
+					ID string `json:"id"`
+				} `json:"data"`
 			}
 			_ = json.Unmarshal(wOnb.Body.Bytes(), &ob)
 			outlet1ID = ob.Data.ID
@@ -190,7 +192,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	})
 	require.Equal(t, http.StatusCreated, wORole.Code)
 	var oRoleResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wORole.Body.Bytes(), &oRoleResp)
 
@@ -211,7 +215,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 		"email_or_phone": staffPhone, "password": "Password#123",
 	})
 	var staffLoginResp struct {
-		Data struct{ AccessToken string `json:"access_token"` } `json:"data"`
+		Data struct {
+			AccessToken string `json:"access_token"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wStaffLogin.Body.Bytes(), &staffLoginResp)
 	staffTok := staffLoginResp.Data.AccessToken
@@ -267,7 +273,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	}).Code)
 	wRiderLogin := doJSONReq(r, http.MethodPost, "/api/v1/auth/login", "", map[string]any{"email_or_phone": riderEmail, "password": "Password#123"})
 	var riderLoginResp struct {
-		Data struct{ AccessToken string `json:"access_token"` } `json:"data"`
+		Data struct {
+			AccessToken string `json:"access_token"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wRiderLogin.Body.Bytes(), &riderLoginResp)
 	riderTok := riderLoginResp.Data.AccessToken
@@ -282,7 +290,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	})
 	require.Equal(t, http.StatusCreated, wDelivOnb.Code)
 	var dpResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wDelivOnb.Body.Bytes(), &dpResp)
 	assert.Equal(t, http.StatusForbidden, doJSONReq(r, http.MethodPatch, "/api/v1/delivery/me/availability", riderTok, map[string]any{"status": "ONLINE_AVAILABLE"}).Code, "PENDING_REVIEW still blocked until Admin approves")
@@ -298,7 +308,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	})
 	require.Equal(t, http.StatusCreated, wAdmRole.Code)
 	var admRoleResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wAdmRole.Body.Bytes(), &admRoleResp)
 
@@ -315,7 +327,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	}).Code)
 	wCandLogin := doJSONReq(r, http.MethodPost, "/api/v1/auth/login", "", map[string]any{"email_or_phone": admCandidateEmail, "password": "Password#123"})
 	var candLoginResp struct {
-		Data struct{ AccessToken string `json:"access_token"` } `json:"data"`
+		Data struct {
+			AccessToken string `json:"access_token"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wCandLogin.Body.Bytes(), &candLoginResp)
 	candTok := candLoginResp.Data.AccessToken
@@ -326,7 +340,9 @@ func TestOnboardingInvitationsCustomRolesAndApprovalGatesIntegration(t *testing.
 	})
 	require.Equal(t, http.StatusCreated, wAdmInv.Code)
 	var admInvResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wAdmInv.Body.Bytes(), &admInvResp)
 
@@ -353,7 +369,7 @@ func TestBrevoMailerAndOpenAdminRegistrationIntegration(t *testing.T) {
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	zoneID := uuid.NewString()
 	_, err = pool.Exec(ctx, `
@@ -440,7 +456,9 @@ func TestBrevoMailerAndOpenAdminRegistrationIntegration(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, wRole.Code)
 	var roleResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wRole.Body.Bytes(), &roleResp)
 
@@ -449,7 +467,9 @@ func TestBrevoMailerAndOpenAdminRegistrationIntegration(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, wPreInv.Code)
 	var preInvResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wPreInv.Body.Bytes(), &preInvResp)
 
@@ -489,7 +509,9 @@ func TestBrevoMailerAndOpenAdminRegistrationIntegration(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, wOnb.Code)
 	var onbResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wOnb.Body.Bytes(), &onbResp)
 
@@ -517,7 +539,9 @@ func TestBrevoMailerAndOpenAdminRegistrationIntegration(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, wDpOnb.Code)
 	var dpOnbResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wDpOnb.Body.Bytes(), &dpOnbResp)
 	require.Equal(t, http.StatusOK, doJSONReq(r, http.MethodPost, "/api/v1/admin/delivery-partners/"+dpOnbResp.Data.ID+"/verify", saTok, map[string]any{"status": "APPROVED"}).Code)
@@ -583,7 +607,7 @@ func TestMenuVisibilityAndMultiOutletStaffScopingIntegration(t *testing.T) {
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	// Deactivate any prior VisZone test fixtures before and after this test so ST_Covers always hits this exact zone
 	_, _ = pool.Exec(ctx, `UPDATE service_zones SET is_active = FALSE WHERE name LIKE 'VisZone-%'`)
@@ -663,7 +687,9 @@ func TestMenuVisibilityAndMultiOutletStaffScopingIntegration(t *testing.T) {
 		})
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 		var resp struct {
-			Data struct{ ID string `json:"id"` } `json:"data"`
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
 		}
 		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		return resp.Data.ID
@@ -689,7 +715,9 @@ func TestMenuVisibilityAndMultiOutletStaffScopingIntegration(t *testing.T) {
 	wCat := doJSONReq(r, http.MethodPost, "/api/v1/restaurant/menu/categories?outlet_id="+outlet1ID, ownerTok, map[string]any{"name": "Mains"})
 	require.Equal(t, http.StatusCreated, wCat.Code)
 	var catResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wCat.Body.Bytes(), &catResp)
 	require.Equal(t, http.StatusCreated, doJSONReq(r, http.MethodPost, "/api/v1/restaurant/menu/items?outlet_id="+outlet1ID, ownerTok, map[string]any{
@@ -714,7 +742,9 @@ func TestMenuVisibilityAndMultiOutletStaffScopingIntegration(t *testing.T) {
 	}).Code)
 	wStaffLogin := doJSONReq(r, http.MethodPost, "/api/v1/restaurant/auth/login", "", map[string]any{"email_or_phone": staffEmail, "password": "Password#123"})
 	var staffLoginResp struct {
-		Data struct{ AccessToken string `json:"access_token"` } `json:"data"`
+		Data struct {
+			AccessToken string `json:"access_token"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wStaffLogin.Body.Bytes(), &staffLoginResp)
 	staffTok := staffLoginResp.Data.AccessToken
@@ -726,7 +756,9 @@ func TestMenuVisibilityAndMultiOutletStaffScopingIntegration(t *testing.T) {
 	require.Equal(t, http.StatusCreated, wInv.Code, wInv.Body.String())
 	var invMulti struct {
 		Data struct {
-			First struct{ ID string `json:"id"` } `json:"first"`
+			First struct {
+				ID string `json:"id"`
+			} `json:"first"`
 		} `json:"data"`
 	}
 	_ = json.Unmarshal(wInv.Body.Bytes(), &invMulti)
@@ -750,7 +782,7 @@ func TestAdminDirectorySubmenusRoleChangeAndRoleDeletionIntegration(t *testing.T
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	superAdminID := uuid.NewString()
 	pwHash, _ := auth.HashPassword("Password#123")
@@ -784,7 +816,9 @@ func TestAdminDirectorySubmenusRoleChangeAndRoleDeletionIntegration(t *testing.T
 	})
 	require.Equal(t, http.StatusCreated, wCustRole.Code, wCustRole.Body.String())
 	var custRoleResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wCustRole.Body.Bytes(), &custRoleResp)
 	require.NotEmpty(t, custRoleResp.Data.ID)
@@ -797,7 +831,9 @@ func TestAdminDirectorySubmenusRoleChangeAndRoleDeletionIntegration(t *testing.T
 	})
 	require.Equal(t, http.StatusCreated, wMgmtRole.Code, wMgmtRole.Body.String())
 	var mgmtRoleResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wMgmtRole.Body.Bytes(), &mgmtRoleResp)
 	require.NotEmpty(t, mgmtRoleResp.Data.ID)
@@ -822,7 +858,9 @@ func TestAdminDirectorySubmenusRoleChangeAndRoleDeletionIntegration(t *testing.T
 	var subLoginResp struct {
 		Data struct {
 			AccessToken string `json:"access_token"`
-			User        struct{ ID string `json:"id"` } `json:"user"`
+			User        struct {
+				ID string `json:"id"`
+			} `json:"user"`
 		} `json:"data"`
 	}
 	_ = json.Unmarshal(wSubLogin.Body.Bytes(), &subLoginResp)
@@ -834,7 +872,9 @@ func TestAdminDirectorySubmenusRoleChangeAndRoleDeletionIntegration(t *testing.T
 	})
 	require.Equal(t, http.StatusCreated, wInv.Code)
 	var invResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wInv.Body.Bytes(), &invResp)
 	require.Equal(t, http.StatusOK, doJSONReq(r, http.MethodPost, "/api/v1/auth/invitations/PLATFORM/"+invResp.Data.ID+"/respond", subTok, map[string]any{"action": "ACCEPT"}).Code)
@@ -902,7 +942,7 @@ func TestOpenSearchSynonymSearchAndRichMenuItemIntegration(t *testing.T) {
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	osURL := os.Getenv("OPENSEARCH_URL")
 	if osURL == "" {
@@ -968,7 +1008,9 @@ func TestOpenSearchSynonymSearchAndRichMenuItemIntegration(t *testing.T) {
 	var ownerLoginResp struct {
 		Data struct {
 			AccessToken string `json:"access_token"`
-			User        struct{ ID string `json:"id"` } `json:"user"`
+			User        struct {
+				ID string `json:"id"`
+			} `json:"user"`
 		} `json:"data"`
 	}
 	_ = json.Unmarshal(wOwnerLogin.Body.Bytes(), &ownerLoginResp)
@@ -988,7 +1030,9 @@ func TestOpenSearchSynonymSearchAndRichMenuItemIntegration(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, wOnb.Code, wOnb.Body.String())
 	var outResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wOnb.Body.Bytes(), &outResp)
 	outletID := outResp.Data.ID
@@ -997,7 +1041,9 @@ func TestOpenSearchSynonymSearchAndRichMenuItemIntegration(t *testing.T) {
 	wCat := doJSONReq(r, http.MethodPost, "/api/v1/restaurant/menu/categories?outlet_id="+outletID, ownerTok, map[string]any{"name": "Artisan Mains"})
 	require.Equal(t, http.StatusCreated, wCat.Code)
 	var catResp struct {
-		Data struct{ ID string `json:"id"` } `json:"data"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
 	_ = json.Unmarshal(wCat.Body.Bytes(), &catResp)
 
@@ -1009,16 +1055,16 @@ func TestOpenSearchSynonymSearchAndRichMenuItemIntegration(t *testing.T) {
 			"description":        "Fiery chilli garlic San Marzano sauce",
 			"veg_classification": "VEG",
 			"cuisine_type":       "Italian",
-			"spice_level":       "HOT",
-			"serving_size":      "360g",
-			"prep_time_minutes": 18,
-			"calories_kcal":     540,
-			"dietary_tags":      []string{"Vegetarian", "Vegan"},
-			"allergens":         []string{"Gluten"},
-			"ingredients":       []string{"Durum wheat", "San Marzano tomato", "Garlic"},
-			"search_keywords":   []string{"spicy italian", "dairy free"},
-			"is_recommended":    true,
-			"base_price_minor":  41000,
+			"spice_level":        "HOT",
+			"serving_size":       "360g",
+			"prep_time_minutes":  18,
+			"calories_kcal":      540,
+			"dietary_tags":       []string{"Vegetarian", "Vegan"},
+			"allergens":          []string{"Gluten"},
+			"ingredients":        []string{"Durum wheat", "San Marzano tomato", "Garlic"},
+			"search_keywords":    []string{"spicy italian", "dairy free"},
+			"is_recommended":     true,
+			"base_price_minor":   41000,
 			"customization_groups": []map[string]any{
 				{
 					"name":           "Extra Toppings",

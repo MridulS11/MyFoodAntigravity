@@ -37,7 +37,7 @@ func TestAuthAndPostGISAddressIntegration(t *testing.T) {
 	require.NoError(t, err, "PostgreSQL + PostGIS must be running for integration tests")
 	defer pool.Close()
 
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	// Ensure Bengaluru zone exists for PostGIS ST_Covers check
 	_, err = pool.Exec(ctx, `

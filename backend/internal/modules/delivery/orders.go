@@ -37,34 +37,34 @@ type deliveryOfferDTO struct {
 }
 
 type deliveryOrderDTO struct {
-	ID                    string             `json:"id"`
-	OrderNumber           string             `json:"order_number"`
-	CustomerID            string             `json:"customer_id"`
-	CustomerName          string             `json:"customer_name"`
-	CustomerPhone         string             `json:"customer_phone"`
-	RestaurantID          string             `json:"restaurant_id"`
-	RestaurantName        string             `json:"restaurant_name"`
-	RestaurantAddress     string             `json:"restaurant_address"`
-	DeliveryAddressLine1  string             `json:"delivery_address_line1"`
-	PickupLat             float64            `json:"pickup_lat"`
-	PickupLng             float64            `json:"pickup_lng"`
-	DropoffLat            float64            `json:"dropoff_lat"`
-	DropoffLng            float64            `json:"dropoff_lng"`
-	OrderStatus           string             `json:"order_status"`
-	PaymentStatus         string             `json:"payment_status"`
-	DeliveryStatus        string             `json:"delivery_status"`
-	PaymentMethod         string             `json:"payment_method"`
-	Currency              string             `json:"currency"`
-	PartnerID             *string            `json:"partner_id,omitempty"`
-	PartnerName           *string            `json:"partner_name,omitempty"`
-	DeliveryOTPHint       string             `json:"delivery_otp_hint,omitempty"`
-	OTPVerifiedAt         *time.Time         `json:"otp_verified_at,omitempty"`
-	TotalPayableMinor     int64              `json:"total_payable_minor"`
-	TipAmountMinor        int64              `json:"tip_amount_minor"`
-	EstimatedPrepMinutes  int                `json:"estimated_prep_minutes"`
-	Items                 []deliveryItemDTO  `json:"items"`
-	CreatedAt             time.Time          `json:"created_at"`
-	UpdatedAt             time.Time          `json:"updated_at"`
+	ID                   string            `json:"id"`
+	OrderNumber          string            `json:"order_number"`
+	CustomerID           string            `json:"customer_id"`
+	CustomerName         string            `json:"customer_name"`
+	CustomerPhone        string            `json:"customer_phone"`
+	RestaurantID         string            `json:"restaurant_id"`
+	RestaurantName       string            `json:"restaurant_name"`
+	RestaurantAddress    string            `json:"restaurant_address"`
+	DeliveryAddressLine1 string            `json:"delivery_address_line1"`
+	PickupLat            float64           `json:"pickup_lat"`
+	PickupLng            float64           `json:"pickup_lng"`
+	DropoffLat           float64           `json:"dropoff_lat"`
+	DropoffLng           float64           `json:"dropoff_lng"`
+	OrderStatus          string            `json:"order_status"`
+	PaymentStatus        string            `json:"payment_status"`
+	DeliveryStatus       string            `json:"delivery_status"`
+	PaymentMethod        string            `json:"payment_method"`
+	Currency             string            `json:"currency"`
+	PartnerID            *string           `json:"partner_id,omitempty"`
+	PartnerName          *string           `json:"partner_name,omitempty"`
+	DeliveryOTPHint      string            `json:"delivery_otp_hint,omitempty"`
+	OTPVerifiedAt        *time.Time        `json:"otp_verified_at,omitempty"`
+	TotalPayableMinor    int64             `json:"total_payable_minor"`
+	TipAmountMinor       int64             `json:"tip_amount_minor"`
+	EstimatedPrepMinutes int               `json:"estimated_prep_minutes"`
+	Items                []deliveryItemDTO `json:"items"`
+	CreatedAt            time.Time         `json:"created_at"`
+	UpdatedAt            time.Time         `json:"updated_at"`
 }
 
 type deliveryItemDTO struct {
@@ -571,18 +571,18 @@ func (h *Handler) listEarnings(c *gin.Context) {
 		var createdAt time.Time
 		if scanErr := rows.Scan(&id, &delivID, &ordID, &ordNum, &basePay, &distPay, &tip, &gross, &fee, &net, &status, &createdAt); scanErr == nil {
 			list = append(list, map[string]any{
-				"id":                    id,
-				"delivery_id":           delivID,
-				"order_id":              ordID,
-				"order_number":          ordNum,
-				"base_payout_minor":     basePay,
-				"distance_payout_minor": distPay,
-				"tip_amount_minor":      tip,
-				"gross_earning_minor":   gross,
+				"id":                     id,
+				"delivery_id":            delivID,
+				"order_id":               ordID,
+				"order_number":           ordNum,
+				"base_payout_minor":      basePay,
+				"distance_payout_minor":  distPay,
+				"tip_amount_minor":       tip,
+				"gross_earning_minor":    gross,
 				"daily_payout_fee_minor": fee,
-				"net_earning_minor":     net,
-				"status":                status,
-				"created_at":            createdAt,
+				"net_earning_minor":      net,
+				"status":                 status,
+				"created_at":             createdAt,
 			})
 		}
 	}

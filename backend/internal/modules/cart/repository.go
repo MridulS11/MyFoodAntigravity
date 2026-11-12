@@ -61,9 +61,9 @@ type CartDTO struct {
 
 // CheckoutValidationDTO confirms pre-order checkout readiness.
 type CheckoutValidationDTO struct {
-	IsValid          bool      `json:"is_valid"`
-	PricingQuoteHash string    `json:"pricing_quote_hash"`
-	Cart             *CartDTO  `json:"cart"`
+	IsValid          bool     `json:"is_valid"`
+	PricingQuoteHash string   `json:"pricing_quote_hash"`
+	Cart             *CartDTO `json:"cart"`
 }
 
 // Repository persists carts and computes live PostgreSQL prices.

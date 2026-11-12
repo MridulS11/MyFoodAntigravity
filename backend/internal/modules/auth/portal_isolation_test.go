@@ -31,7 +31,7 @@ func TestIsolatedPortalAuthenticationCookiesAndOnboardingFlags(t *testing.T) {
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	tm := auth.NewTokenManager("portal-isolation-secret-32-chars", 15*time.Minute, 7*24*time.Hour)
 	repo := auth.NewRepository(pool)

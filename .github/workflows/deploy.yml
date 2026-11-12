@@ -1,0 +1,76 @@
+name: Deploy Database Migrations to Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate-production:
+    name: Validate & Apply Supabase Migrations
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate canonical migration files
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          migs = sorted(f for f in os.listdir("supabase/migrations") if f.endswith(".sql"))
+          if not migs:
+            sys.exit("No migrations found in supabase/migrations/")
+          seen = set()
+          for m in migs:
+            match = re.match(r"^(\d{14})_[a-z0-9_]+\.sql$", m)
+            if not match:
+              sys.exit(f"Invalid Supabase migration filename: {m}")
+            ver = match.group(1)
+            if ver in seen:
+              sys.exit(f"Duplicate migration version: {ver}")
+            seen.add(ver)
+            content = open(os.path.join("supabase/migrations", m)).read().strip()
+            if not content:
+              sys.exit(f"Empty migration file: {m}")
+          print(f"Validated {len(migs)} canonical migration files.")
+          PY
+
+      - name: Link Supabase production project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Inspect remote migration history
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list
+
+      - name: Apply pending migrations to Supabase production
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --yes
+
+      - name: Record deployment summary
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          {
+            echo "### Supabase Migration Deployment"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Status: Pending migrations applied cleanly via \`supabase db push --yes\`."
+          } >> "$GITHUB_STEP_SUMMARY"

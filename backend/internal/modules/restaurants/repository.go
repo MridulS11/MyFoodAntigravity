@@ -110,18 +110,18 @@ type ServiceZoneItem struct {
 
 // SettlementSummary holds per-order accrual rows and penalties for an outlet.
 type SettlementSummary struct {
-	ID                       string    `json:"id"`
-	OrderID                  string    `json:"order_id"`
-	OrderNumber              string    `json:"order_number"`
-	RestaurantID             string    `json:"restaurant_id"`
-	GrossFoodAmountMinor     int64     `json:"gross_food_amount_minor"`
-	PackagingFeeMinor        int64     `json:"packaging_fee_minor"`
-	PlatformCommissionBps    int       `json:"platform_commission_bps"`
-	PlatformCommissionMinor  int64     `json:"platform_commission_minor"`
-	PenaltyDeductionMinor    int64     `json:"penalty_deduction_minor"`
-	NetPayoutMinor           int64     `json:"net_payout_minor"`
-	SettlementStatus         string    `json:"settlement_status"`
-	CreatedAt                time.Time `json:"created_at"`
+	ID                      string    `json:"id"`
+	OrderID                 string    `json:"order_id"`
+	OrderNumber             string    `json:"order_number"`
+	RestaurantID            string    `json:"restaurant_id"`
+	GrossFoodAmountMinor    int64     `json:"gross_food_amount_minor"`
+	PackagingFeeMinor       int64     `json:"packaging_fee_minor"`
+	PlatformCommissionBps   int       `json:"platform_commission_bps"`
+	PlatformCommissionMinor int64     `json:"platform_commission_minor"`
+	PenaltyDeductionMinor   int64     `json:"penalty_deduction_minor"`
+	NetPayoutMinor          int64     `json:"net_payout_minor"`
+	SettlementStatus        string    `json:"settlement_status"`
+	CreatedAt               time.Time `json:"created_at"`
 }
 
 // PenaltyRecord represents a non-acceptance penalty ledger row.

@@ -40,8 +40,23 @@ type Config struct {
 func Load() (*Config, error) {
 	loadDotEnv(".env")
 
+	appEnv := getEnv("APP_ENV", "development")
+	migrationsDir := getEnv("MIGRATIONS_DIR", "../supabase/migrations")
+	if migrationsDir == "migrations" {
+		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+			if _, supaErr := os.Stat("../supabase/migrations"); supaErr == nil {
+				migrationsDir = "../supabase/migrations"
+			}
+		}
+	}
+	autoMigrate := getEnvBool("AUTO_MIGRATE", appEnv != "production")
+	if appEnv == "production" {
+		// Production schema changes are managed exclusively by Supabase CLI / GitHub Actions.
+		autoMigrate = false
+	}
+
 	cfg := &Config{
-		AppEnv:                getEnv("APP_ENV", "development"),
+		AppEnv:                appEnv,
 		HTTPAddr:              getEnv("HTTP_ADDR", ":8080"),
 		WSAddr:                getEnv("WS_ADDR", ":8081"),
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://goodly:goodly_secret@localhost:5432/goodly_db?sslmode=disable"),
@@ -54,9 +69,9 @@ func Load() (*Config, error) {
 		RefreshTokenTTL:       time.Duration(getEnvInt("REFRESH_TOKEN_TTL_DAYS", 7)) * 24 * time.Hour,
 		CookieSecure:          getEnvBool("COOKIE_SECURE", false),
 		FrontendOrigin:        getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
-		MigrationsDir:         getEnv("MIGRATIONS_DIR", "migrations"),
+		MigrationsDir:         migrationsDir,
 		OpenAPISpecPath:       getEnv("OPENAPI_SPEC_PATH", "api/openapi/openapi.yaml"),
-		AutoMigrate:           getEnvBool("AUTO_MIGRATE", true),
+		AutoMigrate:           autoMigrate,
 		PaymentProvider:       getEnv("PAYMENT_PROVIDER", "razorpay"),
 		RazorpayKeyID:         strings.TrimSpace(os.Getenv("RAZORPAY_KEY_ID")),
 		RazorpayKeySecret:     strings.TrimSpace(os.Getenv("RAZORPAY_KEY_SECRET")),

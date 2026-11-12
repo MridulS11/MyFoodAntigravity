@@ -455,21 +455,21 @@ func (r *Repository) UpdatePasswordHash(ctx context.Context, target, newHash str
 
 // InvitationView unifies platform admin invitations and outlet staff invitations for the logged-in user.
 type InvitationView struct {
-	ID              string     `json:"id"`
-	Kind            string     `json:"kind"` // PLATFORM | OUTLET
-	TargetID        string     `json:"target_id"`
-	TargetName      string     `json:"target_name"`
-	RoleName        string     `json:"role_name"`
-	RoleCode        string     `json:"role_code"`
-	Permissions     []string   `json:"permissions"`
-	InvitedByName   string     `json:"invited_by_name"`
-	Status          string     `json:"status"`
-	PreApproved     bool       `json:"pre_approved"`
-	InvitedEmail    *string    `json:"invited_email,omitempty"`
-	InvitedPhone    *string    `json:"invited_phone,omitempty"`
-	AcceptedAt      *time.Time `json:"accepted_at,omitempty"`
-	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID            string     `json:"id"`
+	Kind          string     `json:"kind"` // PLATFORM | OUTLET
+	TargetID      string     `json:"target_id"`
+	TargetName    string     `json:"target_name"`
+	RoleName      string     `json:"role_name"`
+	RoleCode      string     `json:"role_code"`
+	Permissions   []string   `json:"permissions"`
+	InvitedByName string     `json:"invited_by_name"`
+	Status        string     `json:"status"`
+	PreApproved   bool       `json:"pre_approved"`
+	InvitedEmail  *string    `json:"invited_email,omitempty"`
+	InvitedPhone  *string    `json:"invited_phone,omitempty"`
+	AcceptedAt    *time.Time `json:"accepted_at,omitempty"`
+	ApprovedAt    *time.Time `json:"approved_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // ListUserInvitations returns all platform and outlet invitations matching user's ID, email, or phone.

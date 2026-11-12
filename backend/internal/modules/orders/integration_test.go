@@ -48,7 +48,7 @@ func TestPhase3DiscoveryInventoryIdempotencyRacesAndTimeoutIntegration(t *testin
 	pool, err := database.NewPool(ctx, dbURL)
 	require.NoError(t, err)
 	defer pool.Close()
-	require.NoError(t, database.RunMigrations(ctx, pool, "../../../migrations"))
+	require.NoError(t, database.RunMigrations(ctx, pool, "../../../../supabase/migrations"))
 
 	rdb, err := platformredis.NewClient(ctx, redisAddr, "")
 	require.NoError(t, err)

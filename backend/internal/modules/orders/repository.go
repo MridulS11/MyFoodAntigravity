@@ -46,31 +46,31 @@ type OrderItemView struct {
 
 // OrderView represents the complete order resource returned by REST endpoints.
 type OrderView struct {
-	ID                         string          `json:"id"`
-	OrderNumber                string          `json:"order_number"`
-	CustomerID                 string          `json:"customer_id"`
-	RestaurantID               string          `json:"restaurant_id"`
-	RestaurantName             string          `json:"restaurant_name"`
-	OrderStatus                string          `json:"order_status"`
-	PaymentStatus              string          `json:"payment_status"`
-	DeliveryStatus             string          `json:"delivery_status"`
-	PaymentMethod              string          `json:"payment_method"`
-	Currency                   string          `json:"currency"`
-	Breakdown                  cart.Breakdown  `json:"breakdown"`
-	SpecialInstructions        *string         `json:"special_instructions,omitempty"`
-	EstimatedPrepMinutes       int             `json:"estimated_prep_minutes"`
-	AcceptDeadlineAt           *time.Time      `json:"accept_deadline_at,omitempty"`
-	CustomerCareAlertedAt      *time.Time      `json:"customer_care_alerted_at,omitempty"`
-	GraceDeadlineAt            *time.Time      `json:"grace_deadline_at,omitempty"`
-	AcceptanceEscalationState  string          `json:"acceptance_escalation_state"`
-	RatingPromptStatus         string          `json:"rating_prompt_status"`
-	CommissionRateBpsSnapshot  int             `json:"commission_rate_bps_snapshot"`
-	CommissionBasisSnapshot    string          `json:"commission_basis_snapshot"`
-	DeliveryOTPHint            string          `json:"delivery_otp_hint,omitempty"`
-	Version                    int             `json:"version"`
-	Items                      []OrderItemView `json:"items"`
-	CreatedAt                  time.Time       `json:"created_at"`
-	UpdatedAt                  time.Time       `json:"updated_at"`
+	ID                        string          `json:"id"`
+	OrderNumber               string          `json:"order_number"`
+	CustomerID                string          `json:"customer_id"`
+	RestaurantID              string          `json:"restaurant_id"`
+	RestaurantName            string          `json:"restaurant_name"`
+	OrderStatus               string          `json:"order_status"`
+	PaymentStatus             string          `json:"payment_status"`
+	DeliveryStatus            string          `json:"delivery_status"`
+	PaymentMethod             string          `json:"payment_method"`
+	Currency                  string          `json:"currency"`
+	Breakdown                 cart.Breakdown  `json:"breakdown"`
+	SpecialInstructions       *string         `json:"special_instructions,omitempty"`
+	EstimatedPrepMinutes      int             `json:"estimated_prep_minutes"`
+	AcceptDeadlineAt          *time.Time      `json:"accept_deadline_at,omitempty"`
+	CustomerCareAlertedAt     *time.Time      `json:"customer_care_alerted_at,omitempty"`
+	GraceDeadlineAt           *time.Time      `json:"grace_deadline_at,omitempty"`
+	AcceptanceEscalationState string          `json:"acceptance_escalation_state"`
+	RatingPromptStatus        string          `json:"rating_prompt_status"`
+	CommissionRateBpsSnapshot int             `json:"commission_rate_bps_snapshot"`
+	CommissionBasisSnapshot   string          `json:"commission_basis_snapshot"`
+	DeliveryOTPHint           string          `json:"delivery_otp_hint,omitempty"`
+	Version                   int             `json:"version"`
+	Items                     []OrderItemView `json:"items"`
+	CreatedAt                 time.Time       `json:"created_at"`
+	UpdatedAt                 time.Time       `json:"updated_at"`
 }
 
 // ItemRatingInput holds optional per-dish rating data submitted in 3-category review.

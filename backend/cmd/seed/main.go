@@ -162,7 +162,7 @@ func seedBaselineData(ctx context.Context, pool interface {
 
 	// 1. Seed India Service Zones (Bengaluru Central & Mumbai West)
 	zones := []struct {
-		id, name, city, polyWKT string
+		id, name, city, polyWKT    string
 		baseFee, minCart, smallFee int64
 	}{
 		{
