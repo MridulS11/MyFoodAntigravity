@@ -15,6 +15,7 @@ type Config struct {
 	HTTPAddr              string
 	WSAddr                string
 	DatabaseURL           string
+	RedisURL              string
 	RedisAddr             string
 	RedisPassword         string
 	RabbitMQURL           string
@@ -60,6 +61,7 @@ func Load() (*Config, error) {
 		HTTPAddr:              getEnv("HTTP_ADDR", ":8080"),
 		WSAddr:                getEnv("WS_ADDR", ":8081"),
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://goodly:goodly_secret@localhost:5432/goodly_db?sslmode=disable"),
+		RedisURL:              strings.TrimSpace(os.Getenv("REDIS_URL")),
 		RedisAddr:             getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
 		RabbitMQURL:           getEnv("RABBITMQ_URL", "amqp://goodly:goodly_secret@localhost:5672/"),

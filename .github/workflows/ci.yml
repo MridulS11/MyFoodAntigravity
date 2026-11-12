@@ -145,8 +145,4 @@ jobs:
 
       - name: Build Go binaries
         working-directory: backend
-        run: |
-          go build ./cmd/api
-          go build ./cmd/worker
-          go build ./cmd/ws
-          go build ./cmd/seed
+        run: go build ./cmd/...

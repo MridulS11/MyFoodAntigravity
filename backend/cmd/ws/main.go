@@ -25,7 +25,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	rdb, err := platformredis.NewClient(ctx, cfg.RedisAddr, cfg.RedisPassword)
+	rdb, err := platformredis.NewClientWithURL(ctx, cfg.RedisURL, cfg.RedisAddr, cfg.RedisPassword)
 	if err != nil {
 		logger.Warn("redis unavailable for ws hub", "error", err)
 	} else {

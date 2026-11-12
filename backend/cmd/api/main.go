@@ -74,7 +74,7 @@ func main() {
 		logger.Info("database migrations verified")
 	}
 
-	rdb, err := platformredis.NewClient(ctx, cfg.RedisAddr, cfg.RedisPassword)
+	rdb, err := platformredis.NewClientWithURL(ctx, cfg.RedisURL, cfg.RedisAddr, cfg.RedisPassword)
 	if err != nil {
 		logger.Warn("redis unavailable at startup; rate limiting and revocation degraded", "error", err)
 		rdb = nil

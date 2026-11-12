@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -11,6 +12,29 @@ import (
 // Client wraps go-redis with Goodly platform primitives (rate limiting, revocation, WS tickets).
 type Client struct {
 	raw *goredis.Client
+}
+
+// NewClientWithURL connects using REDIS_URL (supporting redis:// and rediss:// TLS)
+// when provided, otherwise falling back to addr and password.
+func NewClientWithURL(ctx context.Context, redisURL, addr, password string) (*Client, error) {
+	redisURL = strings.TrimSpace(redisURL)
+	if redisURL == "" {
+		return NewClient(ctx, addr, password)
+	}
+	opts, err := goredis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse redis url: %w", err)
+	}
+	opts.DialTimeout = 5 * time.Second
+	opts.ReadTimeout = 3 * time.Second
+	opts.WriteTimeout = 3 * time.Second
+
+	rdb := goredis.NewClient(opts)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		_ = rdb.Close()
+		return nil, fmt.Errorf("ping redis: %w", err)
+	}
+	return &Client{raw: rdb}, nil
 }
 
 // NewClient initializes and pings a Redis connection.
