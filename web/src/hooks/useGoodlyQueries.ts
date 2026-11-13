@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { services } from "@/services";
 import type { DiscoveryFeedFilters } from "@/services/contracts/interfaces";
-import type { PortalScope } from "@/services/contracts/types";
+import type { Cart, PortalScope } from "@/services/contracts/types";
 import { ApiError } from "@/services/contracts/errors";
 import { useAppStore } from "@/stores/useAppStore";
 
@@ -77,10 +77,69 @@ export function useAddToCart() {
       selectedOptionIds: string[];
       replaceCart?: boolean;
     }) => services.cart.addItem(payload),
+    onMutate: async (variables) => {
+      await qc.cancelQueries({ queryKey: ["cart"] });
+      const previousCart = qc.getQueryData<Cart>(["cart"]);
+      if (
+        previousCart &&
+        (previousCart.restaurantId === null ||
+          previousCart.restaurantId === variables.restaurantId)
+      ) {
+        const existingIdx = previousCart.items.findIndex(
+          (ci) =>
+            ci.menuItemId === variables.menuItemId &&
+            variables.selectedOptionIds.length === 0 &&
+            ci.customizations.length === 0
+        );
+        const nextItems = [...previousCart.items];
+        let deltaMinor = 0;
+        if (existingIdx >= 0) {
+          const item = nextItems[existingIdx];
+          const unitMinor =
+            item.unitBasePriceMinor + item.unitCustomizationsPriceMinor;
+          deltaMinor = unitMinor * variables.quantity;
+          nextItems[existingIdx] = {
+            ...item,
+            quantity: item.quantity + variables.quantity,
+            lineTotalMinor: item.lineTotalMinor + deltaMinor,
+          };
+        } else {
+          nextItems.push({
+            id: `optimistic-${Date.now()}`,
+            menuItemId: variables.menuItemId,
+            name: "Adding item...",
+            imageUrl: "",
+            quantity: variables.quantity,
+            unitBasePriceMinor: 0,
+            unitCustomizationsPriceMinor: 0,
+            customizations: [],
+            lineTotalMinor: 0,
+          });
+        }
+        qc.setQueryData<Cart>(["cart"], {
+          ...previousCart,
+          restaurantId: variables.restaurantId,
+          items: nextItems,
+          breakdown: {
+            ...previousCart.breakdown,
+            itemSubtotalMinor:
+              previousCart.breakdown.itemSubtotalMinor + deltaMinor,
+            totalPayableMinor:
+              previousCart.breakdown.totalPayableMinor + deltaMinor,
+          },
+        });
+      }
+      return { previousCart };
+    },
     onSuccess: (cart) => {
       qc.setQueryData(["cart"], cart);
     },
-    onError: (err, variables) => {
+    onError: (err, variables, context) => {
+      if (context?.previousCart !== undefined) {
+        qc.setQueryData(["cart"], context.previousCart);
+      } else {
+        void qc.invalidateQueries({ queryKey: ["cart"] });
+      }
       if (
         err instanceof ApiError &&
         err.code === "MULTI_RESTAURANT_CART_CONFLICT"
@@ -116,12 +175,56 @@ export function useUpdateCartItemQuantity() {
       cartItemId: string;
       quantity: number;
     }) => services.cart.updateItemQuantity(cartItemId, quantity),
+    onMutate: async ({ cartItemId, quantity }) => {
+      await qc.cancelQueries({ queryKey: ["cart"] });
+      const previousCart = qc.getQueryData<Cart>(["cart"]);
+      if (previousCart) {
+        let deltaMinor = 0;
+        const nextItems = previousCart.items
+          .map((ci) => {
+            if (ci.id !== cartItemId) return ci;
+            const unitMinor =
+              ci.unitBasePriceMinor + ci.unitCustomizationsPriceMinor;
+            const newTotal = unitMinor * Math.max(0, quantity);
+            deltaMinor = newTotal - ci.lineTotalMinor;
+            return {
+              ...ci,
+              quantity,
+              lineTotalMinor: newTotal,
+            };
+          })
+          .filter((ci) => ci.quantity > 0);
+        qc.setQueryData<Cart>(["cart"], {
+          ...previousCart,
+          restaurantId: nextItems.length === 0 ? null : previousCart.restaurantId,
+          items: nextItems,
+          breakdown: {
+            ...previousCart.breakdown,
+            itemSubtotalMinor: Math.max(
+              0,
+              previousCart.breakdown.itemSubtotalMinor + deltaMinor
+            ),
+            totalPayableMinor: Math.max(
+              0,
+              previousCart.breakdown.totalPayableMinor + deltaMinor
+            ),
+          },
+        });
+      }
+      return { previousCart };
+    },
     onSuccess: (cart) => qc.setQueryData(["cart"], cart),
-    onError: (err) =>
+    onError: (err, _vars, context) => {
+      if (context?.previousCart !== undefined) {
+        qc.setQueryData(["cart"], context.previousCart);
+      } else {
+        void qc.invalidateQueries({ queryKey: ["cart"] });
+      }
       pushToast(
         "error",
         err instanceof Error ? err.message : "Failed to update quantity."
-      ),
+      );
+    },
   });
 }
 

@@ -24,6 +24,7 @@ import type {
   DeliveryPartnerWithStatus,
   EmailCheckResult,
   InvitationItem,
+  MediaCategory,
   MenuCategory,
   MenuItem,
   OperatingHourSlot,
@@ -360,7 +361,11 @@ function mapDiscoveryRestaurant(r: Record<string, unknown>, lat = 12.9784, lng =
     city,
     state: "KA",
     postalCode: "560038",
-    location: { lat, lng },
+    location: { lat: Number(r.lat ?? lat), lng: Number(r.lng ?? lng) },
+    distanceMeters:
+      typeof r.distance_meters === "number"
+        ? Number(r.distance_meters)
+        : undefined,
     maxDeliveryRadiusMeters: 7000,
     heroImageUrl: String(r.hero_image_url ?? "/images/sunday-table.jpg"),
     cardImageUrl: String(r.hero_image_url ?? "/images/sunday-table.jpg"),
@@ -724,6 +729,11 @@ function mapPaymentRow(
     amountMinor: Number(p.amount_minor ?? 0),
     currency: String(p.currency ?? "INR"),
     status: (String(p.status ?? "INITIATED") as PaymentRecord["status"]),
+    paymentMethod: p.payment_method
+      ? (String(p.payment_method) as "ONLINE" | "COD")
+      : p.provider === "COD"
+      ? "COD"
+      : "ONLINE",
     paymentInstrument: p.payment_instrument ? String(p.payment_instrument) : undefined,
     failureMessage: p.failure_message ? String(p.failure_message) : undefined,
     reconciledAt: p.reconciled_at ? String(p.reconciled_at) : undefined,
@@ -763,7 +773,7 @@ export const httpOrderService: Partial<IOrderService> = {
         delivery_address_id: payload.deliveryAddressId,
         payment_method: payload.paymentMethod,
         tip_amount_minor: liveCartTipMinor,
-        special_instructions: liveCartInstructions,
+        special_instructions: payload.specialInstructions ?? liveCartInstructions,
       }),
     });
     liveCartTipMinor = 0;
@@ -786,6 +796,23 @@ export const httpOrderService: Partial<IOrderService> = {
       return { order, payment };
     }
 
+    if (payload.deferOnlineCapture) {
+      const payment: PaymentRecord = {
+        id: `pay-${order.id}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        provider: "RAZORPAY",
+        providerOrderId: order.orderNumber,
+        amountMinor: order.breakdown.totalPayableMinor,
+        currency: order.currency,
+        status: "INITIATED",
+        paymentMethod: "ONLINE",
+        createdAt: order.createdAt,
+      };
+      return { order, payment };
+    }
+
     const sess = await apiRequest<Record<string, unknown>>(
       "/customer/payments/initiate",
       {
@@ -793,22 +820,7 @@ export const httpOrderService: Partial<IOrderService> = {
         body: JSON.stringify({ order_id: order.id }),
       }
     ).catch(() => null);
-
-    if (payload.deferOnlineCapture) {
-      const payment: PaymentRecord = {
-        id: String(sess?.payment_id ?? `pay-${order.id}`),
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        customerId: order.customerId,
-        provider: (String(sess?.provider ?? "RAZORPAY") as PaymentRecord["provider"]),
-        providerOrderId: String(sess?.provider_order_id ?? order.orderNumber),
-        amountMinor: Number(sess?.amount_minor ?? order.breakdown.totalPayableMinor),
-        currency: String(sess?.currency ?? order.currency),
-        status: "INITIATED",
-        createdAt: order.createdAt,
-      };
-      return { order, payment };
-    }
+    void sess;
 
     if (payload.simulatePaymentFailure) {
       return this.simulateGatewayDecision!(
@@ -820,7 +832,7 @@ export const httpOrderService: Partial<IOrderService> = {
 
     return this.simulateGatewayDecision!(order.id, "CAPTURE");
   },
-  async simulateGatewayDecision(orderId, outcome, reason) {
+  async simulateGatewayDecision(orderId, outcome, reason, knownOrder) {
     if (outcome === "FAIL") {
       const failRes = await apiRequest<{ payment?: Record<string, unknown> }>(
         "/customer/payments/sandbox-fail",
@@ -834,7 +846,9 @@ export const httpOrderService: Partial<IOrderService> = {
           }),
         }
       );
-      const refreshedOrder = await this.getOrderById!(orderId);
+      const refreshedOrder = knownOrder
+        ? { ...knownOrder, paymentStatus: "FAILED" as const }
+        : await this.getOrderById!(orderId);
       return {
         order: refreshedOrder,
         payment: mapPaymentRow(
@@ -852,7 +866,13 @@ export const httpOrderService: Partial<IOrderService> = {
         body: JSON.stringify({ order_id: orderId }),
       }
     );
-    const refreshedOrder = await this.getOrderById!(orderId);
+    const refreshedOrder = knownOrder
+      ? {
+          ...knownOrder,
+          orderStatus: "CONFIRMED" as const,
+          paymentStatus: "CAPTURED" as const,
+        }
+      : await this.getOrderById!(orderId);
     return {
       order: refreshedOrder,
       payment: mapPaymentRow(
@@ -1084,7 +1104,15 @@ function mapRestaurantOrderRow(o: Record<string, unknown>): Order {
       unitBasePriceMinor: Number(it.unit_base_price_minor ?? 0),
       unitCustomizationsPriceMinor: Number(it.unit_customizations_price_minor ?? 0),
       lineTotalMinor: Number(it.line_total_minor ?? 0),
-      customizations: [],
+      customizations: ((it.customizations as Record<string, unknown>[]) ?? []).map(
+        (c) => ({
+          groupId: String(c.group_id ?? ""),
+          optionId: String(c.option_id ?? ""),
+          groupName: String(c.group_name ?? ""),
+          optionName: String(c.option_name ?? ""),
+          priceDeltaMinor: Number(c.price_delta_minor ?? 0),
+        })
+      ),
     })),
     statusHistory: [],
     version: Number(o.version ?? 1),
@@ -1423,6 +1451,8 @@ export const httpRestaurantPortalService: Partial<IRestaurantPortalService> = {
         state: payload.state,
         postal_code: payload.postalCode,
         license_number: payload.licenseNumber,
+        lat: payload.lat,
+        lng: payload.lng,
       }),
     });
     const outlet = mapOutletRow(created);
@@ -1518,6 +1548,39 @@ export const httpRestaurantPortalService: Partial<IRestaurantPortalService> = {
       permissions: (r.permissions as OutletPermission[]) ?? payload.permissions,
     };
   },
+  async presignMediaUpload(payload) {
+    const r = await apiRequest<Record<string, unknown>>("/media/presign-upload", {
+      method: "POST",
+      body: JSON.stringify({
+        category: payload.category,
+        outlet_id: payload.outletId,
+        filename: payload.filename,
+        content_type: payload.contentType,
+        size_bytes: payload.sizeBytes,
+      }),
+    });
+    return {
+      bucket: String(r.bucket ?? ""),
+      category: (r.category as MediaCategory) ?? payload.category,
+      outletId: String(r.outlet_id ?? payload.outletId ?? ""),
+      key: String(r.key ?? ""),
+      uploadUrl: String(r.upload_url ?? ""),
+      viewUrl: String(r.view_url ?? ""),
+      expiresInSeconds: Number(r.expires_in_seconds ?? 600),
+    };
+  },
+  async presignMediaView(key) {
+    const r = await apiRequest<Record<string, unknown>>(
+      `/media/presign-view?key=${encodeURIComponent(key)}`
+    );
+    return {
+      key: String(r.key ?? key),
+      category: (r.category as MediaCategory) ?? "Menu",
+      outletId: String(r.outlet_id ?? ""),
+      viewUrl: String(r.view_url ?? ""),
+      expiresInSeconds: Number(r.expires_in_seconds ?? 900),
+    };
+  },
 };
 
 export const httpDeliveryPortalService: Partial<IDeliveryPortalService> = {
@@ -1554,6 +1617,8 @@ export const httpDeliveryPortalService: Partial<IDeliveryPortalService> = {
         vehicle_type: payload.vehicleType,
         vehicle_make_model: payload.vehicleModel,
         license_plate: payload.licensePlate,
+        document_type: payload.documentType,
+        file_key: payload.fileKey,
       }),
     });
     return {
@@ -1572,6 +1637,39 @@ export const httpDeliveryPortalService: Partial<IDeliveryPortalService> = {
       lastKnownLocation: { lat: 12.9784, lng: 77.6408 },
       ratingAverage: Number(p.rating_average ?? 5.0),
       totalDeliveriesCount: Number(p.total_deliveries_count ?? 0),
+    };
+  },
+  async presignMediaUpload(payload) {
+    const r = await apiRequest<Record<string, unknown>>("/delivery/media/presign-upload", {
+      method: "POST",
+      body: JSON.stringify({
+        category: payload.category,
+        outlet_id: payload.outletId,
+        filename: payload.filename,
+        content_type: payload.contentType,
+        size_bytes: payload.sizeBytes,
+      }),
+    });
+    return {
+      bucket: String(r.bucket ?? ""),
+      category: (r.category as MediaCategory) ?? payload.category,
+      outletId: String(r.outlet_id ?? ""),
+      key: String(r.key ?? ""),
+      uploadUrl: String(r.upload_url ?? ""),
+      viewUrl: String(r.view_url ?? ""),
+      expiresInSeconds: Number(r.expires_in_seconds ?? 600),
+    };
+  },
+  async presignMediaView(key) {
+    const r = await apiRequest<Record<string, unknown>>(
+      `/delivery/media/presign-view?key=${encodeURIComponent(key)}`
+    );
+    return {
+      key: String(r.key ?? key),
+      category: (r.category as MediaCategory) ?? "Verification",
+      outletId: String(r.outlet_id ?? ""),
+      viewUrl: String(r.view_url ?? ""),
+      expiresInSeconds: Number(r.expires_in_seconds ?? 900),
     };
   },
   async toggleAvailability(status) {
@@ -1659,8 +1757,12 @@ export const httpDeliveryPortalService: Partial<IDeliveryPortalService> = {
     });
   },
   async getHistoryAndEarnings() {
-    const rows = await apiRequest<Record<string, unknown>[]>("/delivery/earnings");
-    const earnings: DeliveryEarningRecord[] = (rows ?? []).map((e) => ({
+    const [historyRows, earningRows] = await Promise.all([
+      apiRequest<Record<string, unknown>[]>("/delivery/history"),
+      apiRequest<Record<string, unknown>[]>("/delivery/earnings"),
+    ]);
+    const deliveries = (historyRows ?? []).map(mapRestaurantOrderRow);
+    const earnings: DeliveryEarningRecord[] = (earningRows ?? []).map((e) => ({
       id: String(e.id ?? ""),
       orderId: String(e.order_id ?? ""),
       orderNumber: String(e.order_number ?? ""),
@@ -1675,7 +1777,7 @@ export const httpDeliveryPortalService: Partial<IDeliveryPortalService> = {
       status: (e.status as DeliveryEarningRecord["status"]) ?? "CREDITED",
       createdAt: String(e.created_at ?? new Date().toISOString()),
     }));
-    return { deliveries: [], earnings };
+    return { deliveries, earnings };
   },
 };
 
@@ -2092,6 +2194,8 @@ export const httpAdminPortalService: Partial<IAdminPortalService> = {
         lastKnownLocation: { lat: 12.9784, lng: 77.6408 },
         ratingAverage: 5.0,
         totalDeliveriesCount: 0,
+        fileKey: p.file_key ? String(p.file_key) : undefined,
+        documentType: p.document_type ? String(p.document_type) : undefined,
       })
     );
   },
@@ -2140,6 +2244,36 @@ export const httpAdminPortalService: Partial<IAdminPortalService> = {
     return {
       reconciledCount: Number(res.reconciled_count ?? 0),
       processedRefundsCount: Number(res.processed_refunds_count ?? 0),
+    };
+  },
+  async listAllOrders() {
+    const rows = await apiRequest<Record<string, unknown>[]>("/admin/orders");
+    return (rows ?? []).map(mapRestaurantOrderRow);
+  },
+  async interveneOrder(orderId, action, payload) {
+    await apiRequest(`/admin/orders/${encodeURIComponent(orderId)}/intervene`, {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        reason: payload.reason,
+        partner_id: payload.partnerId,
+      }),
+    });
+    const list = await this.listAllOrders!();
+    const updated = list.find((o) => o.id === orderId);
+    if (!updated) throw new Error("Order not found after intervention.");
+    return updated;
+  },
+  async presignMediaView(key) {
+    const r = await apiRequest<Record<string, unknown>>(
+      `/admin/media/presign-view?key=${encodeURIComponent(key)}`
+    );
+    return {
+      key: String(r.key ?? key),
+      category: (r.category as MediaCategory) ?? "Verification",
+      outletId: String(r.outlet_id ?? ""),
+      viewUrl: String(r.view_url ?? ""),
+      expiresInSeconds: Number(r.expires_in_seconds ?? 900),
     };
   },
 };

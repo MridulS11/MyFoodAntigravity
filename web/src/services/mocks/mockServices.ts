@@ -543,8 +543,23 @@ export const mockAuthService: IAuthService = {
 
   async saveAddress(input) {
     let saved!: CustomerAddress;
+    const normalizedLabel = input.label.trim();
+    if (!normalizedLabel) {
+      throw new Error("Location tag is required.");
+    }
     writeMockDb((draft) => {
       const user = requireUser(draft);
+      if (
+        draft.addresses.some(
+          (a) =>
+            a.userId === user.id &&
+            a.label.trim().toLowerCase() === normalizedLabel.toLowerCase()
+        )
+      ) {
+        throw new Error(
+          `You already have a saved address tagged "${normalizedLabel}". Two tags cannot be the same.`
+        );
+      }
       const zone = findCoveringZone(
         draft.zones,
         input.location.lat,
@@ -557,6 +572,7 @@ export const mockAuthService: IAuthService = {
       }
       saved = {
         ...input,
+        label: normalizedLabel,
         id: uuid("addr"),
         userId: user.id,
         isServiceable: Boolean(zone),
@@ -754,16 +770,23 @@ export const mockDiscoveryService: IDiscoveryService = {
       };
     }
 
-    let list = db.restaurants.filter((r) => {
-      if (r.verificationStatus !== "APPROVED" || !r.isActive || !hasActiveMenuItem(db, r.id)) {
-        return false;
-      }
-      const dist = haversineMeters(r.location, {
-        lat: filters.lat,
-        lng: filters.lng,
-      });
-      return dist <= r.maxDeliveryRadiusMeters;
-    });
+    let list = db.restaurants
+      .filter((r) => {
+        if (r.verificationStatus !== "APPROVED" || !r.isActive || !hasActiveMenuItem(db, r.id)) {
+          return false;
+        }
+        const dist = haversineMeters(r.location, {
+          lat: filters.lat,
+          lng: filters.lng,
+        });
+        return dist <= r.maxDeliveryRadiusMeters;
+      })
+      .map((r) => ({
+        ...r,
+        distanceMeters: Math.round(
+          haversineMeters(r.location, { lat: filters.lat, lng: filters.lng })
+        ),
+      }));
 
     if (filters.category && filters.category !== "all") {
       list = list.filter((r) =>
@@ -813,9 +836,14 @@ export const mockDiscoveryService: IDiscoveryService = {
     const zone = findCoveringZone(db.zones, lat, lng);
     if (!zone) return { restaurants: [], dishes: [] };
 
-    const approvedRestaurants = db.restaurants.filter(
-      (r) => r.verificationStatus === "APPROVED" && r.isActive && hasActiveMenuItem(db, r.id)
-    );
+    const approvedRestaurants = db.restaurants
+      .filter(
+        (r) => r.verificationStatus === "APPROVED" && r.isActive && hasActiveMenuItem(db, r.id)
+      )
+      .map((r) => ({
+        ...r,
+        distanceMeters: Math.round(haversineMeters(r.location, { lat, lng })),
+      }));
 
     if (!q) {
       return { restaurants: approvedRestaurants, dishes: [] };
@@ -2025,7 +2053,10 @@ export const mockRestaurantPortalService: IRestaurantPortalService = {
         city: payload.city,
         state: payload.state,
         postalCode: payload.postalCode,
-        location: { lat: 12.9784, lng: 77.6408 },
+        location: {
+          lat: payload.lat ?? 12.9784,
+          lng: payload.lng ?? 77.6408,
+        },
         maxDeliveryRadiusMeters: 7000,
         heroImageUrl: "/images/sunday-table.jpg",
         cardImageUrl: "/images/sunday-table.jpg",

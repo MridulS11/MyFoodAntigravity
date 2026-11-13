@@ -35,13 +35,14 @@ var (
 
 // OrderItemView represents a persisted immutable order item snapshot.
 type OrderItemView struct {
-	ID                           string `json:"id"`
-	MenuItemID                   string `json:"menu_item_id"`
-	Name                         string `json:"name"`
-	Quantity                     int    `json:"quantity"`
-	UnitBasePriceMinor           int64  `json:"unit_base_price_minor"`
-	UnitCustomizationsPriceMinor int64  `json:"unit_customizations_price_minor"`
-	LineTotalMinor               int64  `json:"line_total_minor"`
+	ID                           string                   `json:"id"`
+	MenuItemID                   string                   `json:"menu_item_id"`
+	Name                         string                   `json:"name"`
+	Quantity                     int                      `json:"quantity"`
+	UnitBasePriceMinor           int64                    `json:"unit_base_price_minor"`
+	UnitCustomizationsPriceMinor int64                    `json:"unit_customizations_price_minor"`
+	LineTotalMinor               int64                    `json:"line_total_minor"`
+	Customizations               []cart.CartItemOptionDTO `json:"customizations,omitempty"`
 }
 
 // OrderView represents the complete order resource returned by REST endpoints.
@@ -49,6 +50,7 @@ type OrderView struct {
 	ID                        string          `json:"id"`
 	OrderNumber               string          `json:"order_number"`
 	CustomerID                string          `json:"customer_id"`
+	CustomerName              string          `json:"customer_name,omitempty"`
 	RestaurantID              string          `json:"restaurant_id"`
 	RestaurantName            string          `json:"restaurant_name"`
 	OrderStatus               string          `json:"order_status"`
@@ -470,8 +472,102 @@ func (r *Repository) ListCustomerOrders(ctx context.Context, customerID string) 
 	}
 	if list == nil {
 		list = []OrderView{}
+		return list, nil
 	}
+	r.attachOrderItems(ctx, list)
 	return list, nil
+}
+
+// attachOrderItems batch-loads order items, customizations, and customer names for KDS orders.
+// Falls back gracefully if a secondary query fails so the KDS board still loads.
+func (r *Repository) attachOrderItems(ctx context.Context, list []OrderView) {
+	if len(list) == 0 {
+		return
+	}
+	orderIDs := make([]string, len(list))
+	custIDs := make([]string, 0, len(list))
+	custSeen := make(map[string]struct{}, len(list))
+	for i, o := range list {
+		orderIDs[i] = o.ID
+		if _, ok := custSeen[o.CustomerID]; !ok && o.CustomerID != "" {
+			custSeen[o.CustomerID] = struct{}{}
+			custIDs = append(custIDs, o.CustomerID)
+		}
+	}
+
+	if len(custIDs) > 0 {
+		cRows, cErr := r.pool.Query(ctx, `SELECT id, full_name FROM users WHERE id = ANY($1)`, custIDs)
+		if cErr == nil {
+			custNames := make(map[string]string, len(custIDs))
+			for cRows.Next() {
+				var cid, name string
+				if cRows.Scan(&cid, &name) == nil {
+					custNames[cid] = name
+				}
+			}
+			cRows.Close()
+			for i := range list {
+				if name, ok := custNames[list[i].CustomerID]; ok {
+					list[i].CustomerName = name
+				}
+			}
+		}
+	}
+
+	iRows, err := r.pool.Query(ctx, `
+		SELECT id, order_id, menu_item_id, item_name_snapshot, quantity,
+		       unit_base_price_minor, unit_customizations_price_minor, line_total_minor
+		FROM order_items
+		WHERE order_id = ANY($1)
+	`, orderIDs)
+	if err != nil {
+		return
+	}
+
+	itemsByOrder := make(map[string][]OrderItemView, len(orderIDs))
+	var itemIDs []string
+	for iRows.Next() {
+		var oid string
+		var it OrderItemView
+		if sErr := iRows.Scan(
+			&it.ID, &oid, &it.MenuItemID, &it.Name, &it.Quantity,
+			&it.UnitBasePriceMinor, &it.UnitCustomizationsPriceMinor, &it.LineTotalMinor,
+		); sErr == nil {
+			itemsByOrder[oid] = append(itemsByOrder[oid], it)
+			itemIDs = append(itemIDs, it.ID)
+		}
+	}
+	iRows.Close()
+
+	optsByItem := make(map[string][]cart.CartItemOptionDTO, len(itemIDs))
+	if len(itemIDs) > 0 {
+		oRows, oErr := r.pool.Query(ctx, `
+			SELECT order_item_id, option_id, group_name_snapshot, option_name_snapshot, price_delta_minor
+			FROM order_item_customizations
+			WHERE order_item_id = ANY($1)
+		`, itemIDs)
+		if oErr == nil {
+			for oRows.Next() {
+				var oiID string
+				var opt cart.CartItemOptionDTO
+				if sErr := oRows.Scan(&oiID, &opt.OptionID, &opt.GroupName, &opt.OptionName, &opt.PriceDeltaMinor); sErr == nil {
+					optsByItem[oiID] = append(optsByItem[oiID], opt)
+				}
+			}
+			oRows.Close()
+		}
+	}
+
+	for i := range list {
+		if items, ok := itemsByOrder[list[i].ID]; ok {
+			for j := range items {
+				if opts, okOpt := optsByItem[items[j].ID]; okOpt {
+					items[j].Customizations = opts
+				}
+			}
+			list[i].Items = items
+		}
+	}
 }
 
 // GetOrderByID returns an order with item snapshots.
@@ -625,7 +721,9 @@ func (r *Repository) ListOutletOrders(ctx context.Context, outletID string) ([]O
 	}
 	if list == nil {
 		list = []OrderView{}
+		return list, nil
 	}
+	r.attachOrderItems(ctx, list)
 	return list, nil
 }
 

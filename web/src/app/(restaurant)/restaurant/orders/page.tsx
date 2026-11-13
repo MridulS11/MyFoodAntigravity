@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, Clock, Volume2, VolumeX, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock, Receipt, Volume2, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { OrderChargesBreakdown } from "@/components/customer/OrderChargesBreakdown";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { formatMinor, formatShortTime } from "@/lib/format";
+import { formatMinor, formatPaymentMode, formatShortTime } from "@/lib/format";
 import { services } from "@/services";
 import type { Order } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
@@ -16,6 +17,8 @@ export default function RestaurantOrdersKdsPage() {
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
   const [rejectReason, setRejectReason] = useState("ITEM_OUT_OF_STOCK");
   const [prepChoice, setPrepChoice] = useState<Record<string, number>>({});
+  const [expandedReceipts, setExpandedReceipts] = useState<Record<string, boolean>>({});
+  const [pendingOrderIds, setPendingOrderIds] = useState<Record<string, boolean>>({});
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["restaurantOrders"],
@@ -33,25 +36,64 @@ export default function RestaurantOrdersKdsPage() {
   );
 
   async function handleAccept(order: Order) {
+    const prep = prepChoice[order.id] ?? 20;
+    const previousOrders = qc.getQueryData<Order[]>(["restaurantOrders"]);
+    setPendingOrderIds((p) => ({ ...p, [order.id]: true }));
+    qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+      old.map((o) =>
+        o.id === order.id
+          ? {
+              ...o,
+              orderStatus: "RESTAURANT_ACCEPTED",
+              estimatedPrepMinutes: prep,
+            }
+          : o
+      )
+    );
     try {
-      const prep = prepChoice[order.id] ?? 20;
-      await services.restaurantPortal.acceptOrder(order.id, prep);
-      await qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
+      const updated = await services.restaurantPortal.acceptOrder(order.id, prep);
+      qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+        old.map((o) => (o.id === order.id ? updated : o))
+      );
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
       pushToast("success", `Accepted ${order.orderNumber} (${prep}m prep).`);
     } catch (err) {
+      if (previousOrders !== undefined) {
+        qc.setQueryData(["restaurantOrders"], previousOrders);
+      }
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
       pushToast("error", err instanceof Error ? err.message : "Failed to accept.");
+    } finally {
+      setPendingOrderIds((p) => ({ ...p, [order.id]: false }));
     }
   }
 
   async function handleReject() {
     if (!rejectingOrder) return;
+    const target = rejectingOrder;
+    const previousOrders = qc.getQueryData<Order[]>(["restaurantOrders"]);
+    setPendingOrderIds((p) => ({ ...p, [target.id]: true }));
+    setRejectingOrder(null);
+    qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+      old.map((o) =>
+        o.id === target.id ? { ...o, orderStatus: "CANCELLED" } : o
+      )
+    );
     try {
-      await services.restaurantPortal.rejectOrder(rejectingOrder.id, rejectReason);
-      await qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
-      pushToast("info", `Rejected ${rejectingOrder.orderNumber} & initiated refund.`);
-      setRejectingOrder(null);
+      const updated = await services.restaurantPortal.rejectOrder(target.id, rejectReason);
+      qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+        old.map((o) => (o.id === target.id ? updated : o))
+      );
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
+      pushToast("info", `Rejected ${target.orderNumber} & initiated refund.`);
     } catch (err) {
+      if (previousOrders !== undefined) {
+        qc.setQueryData(["restaurantOrders"], previousOrders);
+      }
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
       pushToast("error", err instanceof Error ? err.message : "Failed to reject.");
+    } finally {
+      setPendingOrderIds((p) => ({ ...p, [target.id]: false }));
     }
   }
 
@@ -59,12 +101,28 @@ export default function RestaurantOrdersKdsPage() {
     orderId: string,
     nextStatus: "PREPARING" | "READY_FOR_PICKUP"
   ) {
+    const previousOrders = qc.getQueryData<Order[]>(["restaurantOrders"]);
+    setPendingOrderIds((p) => ({ ...p, [orderId]: true }));
+    qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+      old.map((o) =>
+        o.id === orderId ? { ...o, orderStatus: nextStatus } : o
+      )
+    );
     try {
-      await services.restaurantPortal.advanceOrderStatus(orderId, nextStatus);
-      await qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
+      const updated = await services.restaurantPortal.advanceOrderStatus(orderId, nextStatus);
+      qc.setQueryData<Order[]>(["restaurantOrders"], (old = []) =>
+        old.map((o) => (o.id === orderId ? updated : o))
+      );
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
       pushToast("success", `Order updated to ${nextStatus.replaceAll("_", " ")}.`);
     } catch (err) {
+      if (previousOrders !== undefined) {
+        qc.setQueryData(["restaurantOrders"], previousOrders);
+      }
+      void qc.invalidateQueries({ queryKey: ["restaurantOrders"] });
       pushToast("error", err instanceof Error ? err.message : "Failed to update.");
+    } finally {
+      setPendingOrderIds((p) => ({ ...p, [orderId]: false }));
     }
   }
 
@@ -126,12 +184,69 @@ export default function RestaurantOrdersKdsPage() {
                   {order.customerName}
                 </div>
                 <ul className="space-y-1 text-xs border-t border-b border-[#E8E3D5] py-2">
-                  {order.items.map((i) => (
-                    <li key={i.id}>
-                      <strong>{i.quantity}×</strong> {i.name}
-                    </li>
-                  ))}
+                  {order.items.length === 0 ? (
+                    <li className="text-[#8A8880]">No item lines loaded</li>
+                  ) : (
+                    order.items.map((i) => (
+                      <li key={i.id} className="flex items-start justify-between gap-2">
+                        <div>
+                          <strong>{i.quantity}×</strong> {i.name}
+                          {i.customizations && i.customizations.length > 0 && (
+                            <div className="text-[11px] text-[#8A8880]">
+                              {i.customizations.map((c) => c.optionName).join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <span className="tabular-nums font-medium text-[#5E5D57] shrink-0">
+                          {formatMinor(i.lineTotalMinor, order.currency)}
+                        </span>
+                      </li>
+                    ))
+                  )}
                 </ul>
+
+                <button
+                  type="button"
+                  data-testid={`kds-expand-receipt-${order.id}`}
+                  onClick={() =>
+                    setExpandedReceipts((prev) => ({
+                      ...prev,
+                      [order.id]: !prev[order.id],
+                    }))
+                  }
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#FCF9F0] hover:bg-[#F5F0E2] border border-[#E8E3D5] text-[11px] font-semibold text-[#1E1F1C] transition-colors"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Receipt className="w-3.5 h-3.5 text-[#5F8E63]" />
+                    <span>{expandedReceipts[order.id] ? "Hide receipt" : "Expand receipt"}</span>
+                  </span>
+                  {expandedReceipts[order.id] ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-[#5E5D57]" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-[#5E5D57]" />
+                  )}
+                </button>
+
+                {expandedReceipts[order.id] && (
+                  <div className="bg-[#FCF9F0] border border-[#E8E3D5] rounded-xl p-3 space-y-2">
+                    <OrderChargesBreakdown
+                      breakdown={order.breakdown}
+                      currency={order.currency}
+                      totalLabel={
+                        order.paymentMethod === "COD"
+                          ? "Total payable (COD)"
+                          : "Total paid"
+                      }
+                      compact
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-[#5E5D57] pt-1 border-t border-[#E8E3D5]">
+                      <span>Payment mode</span>
+                      <span className="font-semibold text-[#1E1F1C]">
+                        {formatPaymentMode(order.paymentMethod)} · {order.paymentStatus}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {order.specialInstructions && (
                   <p className="text-[11px] bg-[#FCF9F0] p-2 rounded-lg text-[#5E5D57]">
                     Note: {order.specialInstructions}
@@ -163,8 +278,9 @@ export default function RestaurantOrdersKdsPage() {
                   <button
                     type="button"
                     data-testid={`kds-reject-${order.id}`}
+                    disabled={Boolean(pendingOrderIds[order.id])}
                     onClick={() => setRejectingOrder(order)}
-                    className="px-3 py-2 rounded-xl border border-[#FAC8C3] text-[#C62828] text-xs font-bold hover:bg-[#FDECEA]"
+                    className="px-3 py-2 rounded-xl border border-[#FAC8C3] text-[#C62828] text-xs font-bold hover:bg-[#FDECEA] disabled:opacity-50"
                     aria-label="Reject order"
                   >
                     <X className="w-4 h-4" />
@@ -172,11 +288,12 @@ export default function RestaurantOrdersKdsPage() {
                   <button
                     type="button"
                     data-testid={`kds-accept-${order.id}`}
+                    disabled={Boolean(pendingOrderIds[order.id])}
                     onClick={() => handleAccept(order)}
-                    className="flex-1 py-2 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] text-[#1E1F1C] text-xs font-bold flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] text-[#1E1F1C] text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <Check className="w-4 h-4" />
-                    <span>Accept Order</span>
+                    <span>{pendingOrderIds[order.id] ? "Accepting..." : "Accept Order"}</span>
                   </button>
                 </div>
               </div>
@@ -196,11 +313,25 @@ export default function RestaurantOrdersKdsPage() {
                   <StatusBadge status={order.orderStatus} />
                 </div>
                 <ul className="space-y-1 text-xs border-t border-b border-[#E8E3D5] py-2">
-                  {order.items.map((i) => (
-                    <li key={i.id}>
-                      <strong>{i.quantity}×</strong> {i.name}
-                    </li>
-                  ))}
+                  {order.items.length === 0 ? (
+                    <li className="text-[#8A8880]">No item lines loaded</li>
+                  ) : (
+                    order.items.map((i) => (
+                      <li key={i.id} className="flex items-start justify-between gap-2">
+                        <div>
+                          <strong>{i.quantity}×</strong> {i.name}
+                          {i.customizations && i.customizations.length > 0 && (
+                            <div className="text-[11px] text-[#8A8880]">
+                              {i.customizations.map((c) => c.optionName).join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <span className="tabular-nums font-medium text-[#5E5D57] shrink-0">
+                          {formatMinor(i.lineTotalMinor, order.currency)}
+                        </span>
+                      </li>
+                    ))
+                  )}
                 </ul>
                 <div className="text-[11px] text-[#5E5D57]">
                   Rider: {order.partnerName ?? "Matching nearby courier..."}
@@ -209,19 +340,21 @@ export default function RestaurantOrdersKdsPage() {
                   <button
                     type="button"
                     data-testid={`kds-start-prep-${order.id}`}
+                    disabled={Boolean(pendingOrderIds[order.id])}
                     onClick={() => handleAdvance(order.id, "PREPARING")}
-                    className="w-full py-2 rounded-xl bg-[#1E1F1C] text-[#FCF9F0] text-xs font-bold"
+                    className="w-full py-2 rounded-xl bg-[#1E1F1C] text-[#FCF9F0] text-xs font-bold disabled:opacity-50"
                   >
-                    Start Preparing
+                    {pendingOrderIds[order.id] ? "Updating..." : "Start Preparing"}
                   </button>
                 ) : (
                   <button
                     type="button"
                     data-testid={`kds-mark-ready-${order.id}`}
+                    disabled={Boolean(pendingOrderIds[order.id])}
                     onClick={() => handleAdvance(order.id, "READY_FOR_PICKUP")}
-                    className="w-full py-2 rounded-xl bg-[#CBEAD0] hover:bg-[#B7DFBD] text-[#1E1F1C] text-xs font-bold"
+                    className="w-full py-2 rounded-xl bg-[#CBEAD0] hover:bg-[#B7DFBD] text-[#1E1F1C] text-xs font-bold disabled:opacity-50"
                   >
-                    Mark Ready for Pickup
+                    {pendingOrderIds[order.id] ? "Updating..." : "Mark Ready for Pickup"}
                   </button>
                 )}
               </div>
@@ -262,9 +395,14 @@ export default function RestaurantOrdersKdsPage() {
                   <StatusBadge status={order.orderStatus} />
                 </div>
                 <p className="text-xs text-[#5E5D57]">{order.customerName}</p>
-                <p className="text-xs font-bold tabular-nums">
-                  {formatMinor(order.breakdown.totalPayableMinor, order.currency)}
-                </p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold tabular-nums">
+                    {formatMinor(order.breakdown.totalPayableMinor, order.currency)}
+                  </span>
+                  <span className="text-[11px] font-semibold text-[#5E5D57]">
+                    {formatPaymentMode(order.paymentMethod)}
+                  </span>
+                </div>
               </div>
             ))}
           </KdsColumn>

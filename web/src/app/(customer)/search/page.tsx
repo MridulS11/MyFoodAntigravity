@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Plus, Star, X } from "lucide-react";
+import { Clock, MapPin, Plus, Star, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { VegClassificationBadge } from "@/components/shared/VegClassificationBadge";
 import { useAddToCart } from "@/hooks/useGoodlyQueries";
 import { formatDeliveryFeeLabel, formatMinor } from "@/lib/format";
+import { formatDistance, haversineDistanceMeters } from "@/lib/geo";
 import { services } from "@/services";
 import type { VegClassification } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
@@ -285,6 +286,18 @@ function SearchContent() {
                               rest.currency
                             )}
                           </span>
+                          {formatDistance(
+                            rest.distanceMeters ??
+                              haversineDistanceMeters(activePoint, rest.location)
+                          ) && (
+                            <span className="inline-flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-[#5F8E63]" />
+                              {formatDistance(
+                                rest.distanceMeters ??
+                                  haversineDistanceMeters(activePoint, rest.location)
+                              )}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </Link>

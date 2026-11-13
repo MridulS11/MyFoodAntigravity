@@ -21,6 +21,7 @@ import type {
   EmailCheckResult,
   GeoPoint,
   InvitationItem,
+  MediaCategory,
   MenuCategory,
   MenuItem,
   MenuItemRatingEntry,
@@ -33,6 +34,8 @@ import type {
   OutletStaffMember,
   PaymentRecord,
   PortalAuthResult,
+  PresignedMediaUploadResponse,
+  PresignedMediaViewResponse,
   PortalScope,
   RefundRecord,
   Restaurant,
@@ -161,13 +164,15 @@ export interface IOrderService {
     paymentMethod: "ONLINE" | "COD";
     pricingQuoteHash: string;
     idempotencyKey: string;
+    specialInstructions?: string;
     simulatePaymentFailure?: boolean;
     deferOnlineCapture?: boolean;
   }): Promise<{ order: Order; payment: PaymentRecord }>;
   simulateGatewayDecision?(
     orderId: string,
     outcome: "CAPTURE" | "FAIL",
-    reason?: string
+    reason?: string,
+    knownOrder?: Order
   ): Promise<{ order: Order; payment: PaymentRecord }>;
   retryPayment(orderId: string): Promise<{ order: Order; payment: PaymentRecord }>;
   listMyOrders(): Promise<Order[]>;
@@ -248,6 +253,8 @@ export interface IRestaurantPortalService {
     state: string;
     postalCode: string;
     licenseNumber: string;
+    lat?: number;
+    lng?: number;
   }): Promise<Restaurant>;
   toggleAcceptingOrders(isAccepting: boolean): Promise<Restaurant>;
   updateOperatingHours(hours: OperatingHourSlot[]): Promise<Restaurant>;
@@ -267,6 +274,14 @@ export interface IRestaurantPortalService {
     penalties?: OutletPenaltyRecord[];
   }>;
   replyToReview(reviewId: string, reply: string): Promise<ReviewRecord>;
+  presignMediaUpload?(payload: {
+    category: MediaCategory;
+    outletId?: string;
+    filename: string;
+    contentType: string;
+    sizeBytes?: number;
+  }): Promise<PresignedMediaUploadResponse>;
+  presignMediaView?(key: string): Promise<PresignedMediaViewResponse>;
 }
 
 export interface IDeliveryPortalService {
@@ -275,7 +290,17 @@ export interface IDeliveryPortalService {
     vehicleType: DeliveryPartner["vehicleType"];
     vehicleModel: string;
     licensePlate: string;
+    documentType?: string;
+    fileKey?: string;
   }): Promise<DeliveryPartner>;
+  presignMediaUpload?(payload: {
+    category: MediaCategory;
+    outletId?: string;
+    filename: string;
+    contentType: string;
+    sizeBytes?: number;
+  }): Promise<PresignedMediaUploadResponse>;
+  presignMediaView?(key: string): Promise<PresignedMediaViewResponse>;
   toggleAvailability(
     status: "ONLINE_AVAILABLE" | "OFFLINE",
     location?: GeoPoint
@@ -413,6 +438,7 @@ export interface IAdminPortalService {
   revokeAdminInvitation(invitationId: string): Promise<void>;
   listAllPendingOutletStaff(): Promise<(OutletStaffMember & { outletName: string })[]>;
   approveOutletStaff(outletId: string, assignmentId: string): Promise<OutletStaffMember>;
+  presignMediaView?(key: string): Promise<PresignedMediaViewResponse>;
 }
 
 export interface ServiceRegistry {

@@ -3,6 +3,7 @@ package users
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -81,7 +82,7 @@ func (h *Handler) listAddresses(c *gin.Context) {
 }
 
 type createAddressReq struct {
-	Label                string  `json:"label" binding:"required,oneof=Home Work Other"`
+	Label                string  `json:"label" binding:"required,min=1,max=50"`
 	RecipientName        string  `json:"recipient_name" binding:"required,min=2"`
 	RecipientPhone       string  `json:"recipient_phone" binding:"required,min=8"`
 	AddressLine1         string  `json:"address_line1" binding:"required,min=4"`
@@ -103,8 +104,13 @@ func (h *Handler) createAddress(c *gin.Context) {
 		httputil.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), nil)
 		return
 	}
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		httputil.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "Location tag is required.", nil)
+		return
+	}
 	created, err := h.repo.CreateAddress(c.Request.Context(), auth.CurrentUserID(c), CreateAddressInput{
-		Label:                req.Label,
+		Label:                label,
 		RecipientName:        req.RecipientName,
 		RecipientPhone:       req.RecipientPhone,
 		AddressLine1:         req.AddressLine1,
@@ -119,6 +125,10 @@ func (h *Handler) createAddress(c *gin.Context) {
 		Lng:                  req.Lng,
 		IsDefault:            req.IsDefault,
 	})
+	if errors.Is(err, ErrDuplicateAddressLabel) {
+		httputil.Fail(c, http.StatusConflict, "DUPLICATE_ADDRESS_LABEL", "You already have a saved address with this tag. Please choose a different tag.", nil)
+		return
+	}
 	if err != nil {
 		httputil.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Could not save address.", nil)
 		return

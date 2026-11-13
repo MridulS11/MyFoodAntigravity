@@ -17,6 +17,7 @@ import (
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/cart"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/delivery"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/discovery"
+	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/media"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/menu"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/orders"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/modules/payments"
@@ -26,6 +27,7 @@ import (
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/middleware"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/providers/mailer"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/providers/paymentgw"
+	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/providers/storage"
 	platformredis "github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/redis"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/search"
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/telemetry"
@@ -189,6 +191,20 @@ func main() {
 	adminHandler := admin.NewHandler(pool, authRepo, tokens, rdb)
 	adminHandler.SetMailer(mailSvc)
 
+	r2Client := storage.NewR2Client(storage.R2Config{
+		AccountID:       cfg.R2AccountID,
+		AccessKeyID:     cfg.R2AccessKeyID,
+		SecretAccessKey: cfg.R2SecretAccessKey,
+		Bucket:          cfg.R2Bucket,
+		PublicURL:       cfg.R2PublicURL,
+	})
+	if r2Client != nil {
+		logger.Info("initialized Cloudflare R2 media storage", "bucket", cfg.R2Bucket)
+	} else {
+		logger.Info("R2 credentials unset; presigned media upload endpoints will return 503 until configured")
+	}
+	mediaHandler := media.NewHandler(r2Client, restRepo, tokens, rdb)
+
 	v1 := router.Group("/api/v1")
 	authHandler.RegisterRoutes(v1)
 	usersHandler.RegisterRoutes(v1)
@@ -200,6 +216,7 @@ func main() {
 	payHandler.RegisterRoutes(v1)
 	delivHandler.RegisterRoutes(v1)
 	adminHandler.RegisterRoutes(v1)
+	mediaHandler.RegisterRoutes(v1)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

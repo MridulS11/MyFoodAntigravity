@@ -541,6 +541,43 @@ func (h *Handler) pingLocation(c *gin.Context) {
 	httputil.OK(c, gin.H{"recorded": true})
 }
 
+func (h *Handler) listDeliveryHistory(c *gin.Context) {
+	partnerID, _, err := h.getApprovedPartner(c.Request.Context(), auth.CurrentUserID(c))
+	if err != nil {
+		httputil.OK(c, []any{})
+		return
+	}
+	rows, err := h.pool.Query(c.Request.Context(), `
+		SELECT d.order_id
+		FROM deliveries d
+		JOIN orders o ON o.id = d.order_id
+		WHERE d.partner_id = $1 AND o.order_status = 'DELIVERED'
+		ORDER BY COALESCE(d.delivered_at, o.updated_at) DESC
+		LIMIT 100
+	`, partnerID)
+	if err != nil {
+		httputil.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Could not fetch delivery history.", nil)
+		return
+	}
+	var orderIDs []string
+	for rows.Next() {
+		var oid string
+		if scanErr := rows.Scan(&oid); scanErr == nil {
+			orderIDs = append(orderIDs, oid)
+		}
+	}
+	rows.Close()
+
+	list := make([]*deliveryOrderDTO, 0, len(orderIDs))
+	for _, oid := range orderIDs {
+		ov, loadErr := h.loadDeliveryOrder(c.Request.Context(), oid, partnerID)
+		if loadErr == nil && ov != nil {
+			list = append(list, ov)
+		}
+	}
+	httputil.OK(c, list)
+}
+
 func (h *Handler) listEarnings(c *gin.Context) {
 	partnerID, _, err := h.getApprovedPartner(c.Request.Context(), auth.CurrentUserID(c))
 	if err != nil {

@@ -123,6 +123,8 @@ func (h *Handler) RegisterRoutes(v1 *gin.RouterGroup) {
 		adm.GET("/delivery-partners", auth.RequireLiveAnyPermission(h.authRepo, "partners:verify", "users:delivery:view", "users:manage"), h.listDeliveryPartners)
 		adm.POST("/delivery-partners/:partnerId/verify", auth.RequireLivePermission(h.authRepo, "partners:verify"), h.verifyDeliveryPartner)
 
+		adm.GET("/orders", auth.RequireLivePermission(h.authRepo, "orders:monitor"), h.listAllOrders)
+		adm.POST("/orders/:orderId/intervene", auth.RequireLivePermission(h.authRepo, "orders:monitor"), h.interveneOrder)
 		adm.GET("/orders/monitor", auth.RequireLivePermission(h.authRepo, "orders:monitor"), h.ordersMonitor)
 	}
 }
@@ -710,7 +712,11 @@ func (h *Handler) verifyRestaurantOwner(c *gin.Context) {
 
 func (h *Handler) listDeliveryPartners(c *gin.Context) {
 	rows, err := h.pool.Query(c.Request.Context(), `
-		SELECT dp.id, dp.user_id, u.full_name, u.email, u.phone, dp.vehicle_type, COALESCE(dp.vehicle_make_model, ''), COALESCE(dp.license_plate, ''), dp.verification_status, dp.availability_status
+		SELECT dp.id, dp.user_id, u.full_name, u.email, u.phone, dp.vehicle_type,
+		       COALESCE(dp.vehicle_make_model, ''), COALESCE(dp.license_plate, ''),
+		       dp.verification_status, dp.availability_status,
+		       COALESCE((SELECT file_key FROM delivery_partner_documents WHERE partner_id = dp.id ORDER BY created_at DESC LIMIT 1), ''),
+		       COALESCE((SELECT document_type FROM delivery_partner_documents WHERE partner_id = dp.id ORDER BY created_at DESC LIMIT 1), '')
 		FROM delivery_partners dp
 		JOIN users u ON u.id = dp.user_id
 		ORDER BY dp.created_at DESC
@@ -722,14 +728,15 @@ func (h *Handler) listDeliveryPartners(c *gin.Context) {
 	defer rows.Close()
 	out := make([]gin.H, 0)
 	for rows.Next() {
-		var id, userID, name, email, phone, vType, vModel, plate, vStatus, aStatus string
-		if err := rows.Scan(&id, &userID, &name, &email, &phone, &vType, &vModel, &plate, &vStatus, &aStatus); err != nil {
+		var id, userID, name, email, phone, vType, vModel, plate, vStatus, aStatus, fileKey, docType string
+		if err := rows.Scan(&id, &userID, &name, &email, &phone, &vType, &vModel, &plate, &vStatus, &aStatus, &fileKey, &docType); err != nil {
 			continue
 		}
 		out = append(out, gin.H{
 			"id": id, "user_id": userID, "full_name": name, "email": email, "phone": phone,
 			"vehicle_type": vType, "vehicle_make_model": vModel, "license_plate": plate,
 			"verification_status": vStatus, "availability_status": aStatus,
+			"file_key": fileKey, "document_type": docType,
 		})
 	}
 	httputil.OK(c, out)
@@ -762,6 +769,133 @@ func (h *Handler) verifyDeliveryPartner(c *gin.Context) {
 		})
 	}
 	httputil.OK(c, gin.H{"updated": true, "verification_status": req.Status})
+}
+
+func (h *Handler) listAllOrders(c *gin.Context) {
+	rows, err := h.pool.Query(c.Request.Context(), `
+		SELECT o.id, o.order_number, o.customer_id, COALESCE(cu.full_name, 'Customer'), COALESCE(cu.phone, ''),
+		       o.restaurant_id, rest.name, rest.slug, rest.address_line1,
+		       o.order_status, o.payment_status, o.delivery_status, o.payment_method, o.currency,
+		       d.partner_id, pu.full_name,
+		       o.item_subtotal_minor, o.small_cart_fee_minor, o.packaging_fee_minor,
+		       o.delivery_fee_minor, o.platform_fee_minor, o.discount_amount_minor,
+		       o.tax_amount_minor, o.tip_amount_minor, o.total_payable_minor,
+		       o.estimated_prep_minutes, o.created_at, o.updated_at
+		FROM orders o
+		LEFT JOIN users cu ON cu.id = o.customer_id
+		JOIN restaurants rest ON rest.id = o.restaurant_id
+		LEFT JOIN deliveries d ON d.order_id = o.id
+		LEFT JOIN delivery_partners dp ON dp.id = d.partner_id
+		LEFT JOIN users pu ON pu.id = dp.user_id
+		ORDER BY o.created_at DESC
+		LIMIT 200
+	`)
+	if err != nil {
+		httputil.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Could not fetch platform orders.", nil)
+		return
+	}
+	defer rows.Close()
+
+	list := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, orderNumber, customerID, customerName, customerPhone string
+		var restaurantID, restaurantName, restaurantSlug, restaurantAddr string
+		var orderStatus, paymentStatus, deliveryStatus, paymentMethod, currency string
+		var partnerID, partnerName *string
+		var itemSub, smallCart, pkg, deliv, plat, disc, tax, tip, total int64
+		var prepMins int
+		var createdAt, updatedAt time.Time
+		if scanErr := rows.Scan(
+			&id, &orderNumber, &customerID, &customerName, &customerPhone,
+			&restaurantID, &restaurantName, &restaurantSlug, &restaurantAddr,
+			&orderStatus, &paymentStatus, &deliveryStatus, &paymentMethod, &currency,
+			&partnerID, &partnerName,
+			&itemSub, &smallCart, &pkg, &deliv, &plat, &disc, &tax, &tip, &total,
+			&prepMins, &createdAt, &updatedAt,
+		); scanErr != nil {
+			continue
+		}
+		list = append(list, map[string]any{
+			"id":                     id,
+			"order_number":           orderNumber,
+			"customer_id":            customerID,
+			"customer_name":          customerName,
+			"customer_phone":         customerPhone,
+			"restaurant_id":          restaurantID,
+			"restaurant_name":        restaurantName,
+			"restaurant_slug":        restaurantSlug,
+			"restaurant_address":     restaurantAddr,
+			"order_status":           orderStatus,
+			"payment_status":         paymentStatus,
+			"delivery_status":        deliveryStatus,
+			"payment_method":         paymentMethod,
+			"currency":               currency,
+			"partner_id":             partnerID,
+			"partner_name":           partnerName,
+			"estimated_prep_minutes": prepMins,
+			"created_at":             createdAt,
+			"updated_at":             updatedAt,
+			"breakdown": map[string]any{
+				"item_subtotal_minor":   itemSub,
+				"small_cart_fee_minor":  smallCart,
+				"packaging_fee_minor":   pkg,
+				"delivery_fee_minor":    deliv,
+				"platform_fee_minor":    plat,
+				"discount_amount_minor": disc,
+				"tax_amount_minor":      tax,
+				"tip_amount_minor":      tip,
+				"total_payable_minor":   total,
+			},
+			"items": []any{},
+		})
+	}
+	httputil.OK(c, list)
+}
+
+func (h *Handler) interveneOrder(c *gin.Context) {
+	orderID := c.Param("orderId")
+	var req struct {
+		Action    string  `json:"action" binding:"required,oneof=MANUAL_ASSIGN_PARTNER FORCE_CANCEL_REFUND"`
+		Reason    string  `json:"reason" binding:"required,min=3"`
+		PartnerID *string `json:"partner_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), nil)
+		return
+	}
+	switch req.Action {
+	case "FORCE_CANCEL_REFUND":
+		res, err := h.pool.Exec(c.Request.Context(), `
+			UPDATE orders
+			SET order_status = 'CANCELLED',
+			    payment_status = CASE WHEN payment_status = 'CAPTURED' THEN 'REFUNDED' ELSE payment_status END,
+			    cancellation_reason = $2,
+			    cancelled_at = NOW(),
+			    version = version + 1
+			WHERE id = $1
+		`, orderID, req.Reason)
+		if err != nil || res.RowsAffected() == 0 {
+			httputil.Fail(c, http.StatusNotFound, "NOT_FOUND", "Order not found.", nil)
+			return
+		}
+	case "MANUAL_ASSIGN_PARTNER":
+		if req.PartnerID == nil || *req.PartnerID == "" {
+			httputil.Fail(c, http.StatusBadRequest, "VALIDATION_ERROR", "partner_id is required.", nil)
+			return
+		}
+		if _, err := h.pool.Exec(c.Request.Context(), `
+			UPDATE deliveries
+			SET partner_id = $2, status = 'PARTNER_ASSIGNED', assigned_at = NOW(), version = version + 1
+			WHERE order_id = $1
+		`, orderID, *req.PartnerID); err != nil {
+			httputil.Fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Could not assign partner.", nil)
+			return
+		}
+		_, _ = h.pool.Exec(c.Request.Context(), `
+			UPDATE orders SET delivery_status = 'PARTNER_ASSIGNED', version = version + 1 WHERE id = $1
+		`, orderID)
+	}
+	httputil.OK(c, gin.H{"updated": true, "action": req.Action})
 }
 
 func (h *Handler) ordersMonitor(c *gin.Context) {

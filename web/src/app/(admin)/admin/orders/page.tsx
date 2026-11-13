@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { formatMinor, formatOrderDate } from "@/lib/format";
+import { formatMinor, formatOrderDate, formatPaymentMode } from "@/lib/format";
 import { services } from "@/services";
 import type { Order } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
@@ -98,7 +98,12 @@ export default function AdminOrdersPage() {
                     <StatusBadge status={o.orderStatus} />
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={o.paymentStatus} />
+                    <div className="space-y-1">
+                      <StatusBadge status={o.paymentStatus} />
+                      <div className="text-[11px] font-medium text-[#5E5D57]">
+                        {formatPaymentMode(o.paymentMethod)}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.deliveryStatus} />

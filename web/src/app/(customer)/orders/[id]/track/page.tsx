@@ -12,10 +12,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { OrderChargesBreakdown } from "@/components/customer/OrderChargesBreakdown";
 import { BrooklynMap } from "@/components/shared/BrooklynMap";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useOrderDetail, useTrackingSnapshot } from "@/hooks/useGoodlyQueries";
-import { formatDistance, formatMinor, formatOrderDate } from "@/lib/format";
+import { formatDistance, formatMinor, formatOrderDate, formatPaymentMode } from "@/lib/format";
 import { services } from "@/services";
 import { useAppStore } from "@/stores/useAppStore";
 
@@ -101,9 +102,12 @@ export default function TrackOrderPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <StatusBadge status={order.orderStatus} />
           <StatusBadge status={order.paymentStatus} />
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#F5F0E2] text-[#1E1F1C]">
+            {formatPaymentMode(order.paymentMethod)}
+          </span>
         </div>
       </div>
 
@@ -263,20 +267,38 @@ export default function TrackOrderPage() {
             </div>
             <div className="divide-y divide-[#E8E3D5] border-t border-b border-[#E8E3D5] text-xs">
               {order.items.map((item) => (
-                <div key={item.id} className="py-2 flex justify-between">
-                  <span>
-                    <strong>{item.quantity} ×</strong> {item.name}
-                  </span>
-                  <span className="font-semibold tabular-nums">
+                <div key={item.id} className="py-2 flex justify-between gap-2">
+                  <div>
+                    <span>
+                      <strong>{item.quantity} ×</strong> {item.name}
+                    </span>
+                    {item.customizations && item.customizations.length > 0 && (
+                      <div className="text-[11px] text-[#8A8880]">
+                        {item.customizations.map((c) => c.optionName).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-semibold tabular-nums shrink-0">
                     {formatMinor(item.lineTotalMinor, order.currency)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-sm font-extrabold text-[#1E1F1C]">
-              <span>Total Paid</span>
-              <span className="tabular-nums">
-                {formatMinor(order.breakdown.totalPayableMinor, order.currency)}
+            <OrderChargesBreakdown
+              breakdown={order.breakdown}
+              currency={order.currency}
+              totalLabel={
+                order.paymentMethod === "COD" && order.paymentStatus !== "CAPTURED"
+                  ? "Total payable (COD)"
+                  : "Total paid"
+              }
+              totalTestId="receipt-total"
+              compact
+            />
+            <div className="flex items-center justify-between text-xs text-[#5E5D57] pt-1">
+              <span>Payment mode</span>
+              <span className="font-semibold text-[#1E1F1C]">
+                {formatPaymentMode(order.paymentMethod)} · {order.paymentStatus}
               </span>
             </div>
 

@@ -1,13 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Flame, Plus, Sparkles, Tag, Trash2, X } from "lucide-react";
+import { Flame, Plus, Sparkles, Tag, Trash2, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { VegClassificationBadge } from "@/components/shared/VegClassificationBadge";
 import { formatMinor } from "@/lib/format";
+import { uploadMediaWithPresign } from "@/lib/mediaUpload";
 import { menuItemSchema } from "@/lib/validators/schemas";
 import { services } from "@/services";
 import type {
@@ -48,6 +49,7 @@ export default function RestaurantMenuPage() {
   });
 
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [vegClassification, setVegClassification] = useState<VegClassification>("VEG");
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
@@ -585,13 +587,47 @@ export default function RestaurantMenuPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Dish Image URL</label>
-                  <input
-                    data-testid="dish-image-input"
-                    {...form.register("imageUrl")}
-                    placeholder="https://..."
-                    className="w-full bg-white border border-[#E8E3D5] rounded-xl px-3 py-2 text-xs"
-                  />
+                  <label className="block text-xs font-semibold mb-1">Dish Image</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      data-testid="dish-image-input"
+                      {...form.register("imageUrl")}
+                      placeholder="https://... or upload"
+                      className="flex-1 min-w-0 bg-white border border-[#E8E3D5] rounded-xl px-3 py-2 text-xs"
+                    />
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#E8E3D5] bg-white text-xs font-semibold cursor-pointer hover:bg-[#FCF9F0] shrink-0">
+                      <Upload className="w-3.5 h-3.5 text-[#5F8E63]" />
+                      {uploadingImage ? "Uploading..." : "Upload"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        className="hidden"
+                        disabled={uploadingImage}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploadingImage(true);
+                          try {
+                            const res = await uploadMediaWithPresign(services.restaurantPortal, {
+                              category: "Menu",
+                              outletId: data.restaurant.id,
+                              file,
+                            });
+                            form.setValue("imageUrl", res.viewUrl, { shouldDirty: true });
+                            pushToast("success", "Dish image uploaded to R2 (Menu key).");
+                          } catch (err) {
+                            pushToast(
+                              "error",
+                              err instanceof Error ? err.message : "Image upload failed."
+                            );
+                          } finally {
+                            setUploadingImage(false);
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 

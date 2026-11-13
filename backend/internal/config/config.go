@@ -35,6 +35,11 @@ type Config struct {
 	BrevoKey              string
 	BrevoSenderEmail      string
 	BrevoSenderName       string
+	R2AccountID           string
+	R2AccessKeyID         string
+	R2SecretAccessKey     string
+	R2Bucket              string
+	R2PublicURL           string
 }
 
 // Load reads .env (without overriding already-exported env vars) and populates Config.
@@ -81,6 +86,11 @@ func Load() (*Config, error) {
 		BrevoKey:              strings.TrimSpace(os.Getenv("BREVO_KEY")),
 		BrevoSenderEmail:      getEnv("BREVO_SENDER_EMAIL", "noreply@goodly.in"),
 		BrevoSenderName:       getEnv("BREVO_SENDER_NAME", "Goodly Food Delivery"),
+		R2AccountID:           strings.TrimSpace(os.Getenv("R2_ACCOUNT_ID")),
+		R2AccessKeyID:         strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),
+		R2SecretAccessKey:     strings.TrimSpace(os.Getenv("R2_SECRET_ACCESS_KEY")),
+		R2Bucket:              getEnv("R2_BUCKET", "goodly-media"),
+		R2PublicURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("R2_PUBLIC_URL")), "/"),
 	}
 
 	if cfg.AppEnv == "production" && len(cfg.JWTAccessSecret) < 32 {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { formatMinor, formatOrderDate } from "@/lib/format";
+import { formatMinor, formatOrderDate, formatPaymentMode } from "@/lib/format";
 import { services } from "@/services";
 import type { PaymentRecord } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
@@ -104,6 +104,7 @@ export default function AdminPaymentsPage() {
             <thead className="bg-[#FCF9F0] text-[#8A8880] uppercase">
               <tr>
                 <th className="px-4 py-3">Order #</th>
+                <th className="px-4 py-3">Mode</th>
                 <th className="px-4 py-3">Provider ID</th>
                 <th className="px-4 py-3">Amount</th>
                 <th className="px-4 py-3">Status</th>
@@ -115,6 +116,11 @@ export default function AdminPaymentsPage() {
               {payments.map((p) => (
                 <tr key={p.id}>
                   <td className="px-4 py-3 font-bold">{p.orderNumber}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5F0E2] text-[#1E1F1C]">
+                      {formatPaymentMode(p.paymentMethod, p.paymentInstrument)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 font-mono text-[11px]">{p.providerOrderId}</td>
                   <td className="px-4 py-3 font-bold tabular-nums">
                     {formatMinor(p.amountMinor, p.currency)}

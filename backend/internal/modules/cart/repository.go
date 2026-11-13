@@ -81,10 +81,15 @@ func NewRepository(pool *pgxpool.Pool, quoteSecret string) *Repository {
 func (r *Repository) GetCart(ctx context.Context, customerID string, addressID *string, tipMinor int64) (*CartDTO, error) {
 	var cartID string
 	var restID, couponID, savedAddrID, instructions *string
+	var restName, restSlug, zoneID *string
+	var packagingFee int64
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, restaurant_id, applied_coupon_id, delivery_address_id, special_instructions
-		FROM carts WHERE customer_id = $1
-	`, customerID).Scan(&cartID, &restID, &couponID, &savedAddrID, &instructions)
+		SELECT c.id, c.restaurant_id, c.applied_coupon_id, c.delivery_address_id, c.special_instructions,
+		       rest.name, rest.slug, rest.service_zone_id, COALESCE(rest.packaging_fee_minor, 0)
+		FROM carts c
+		LEFT JOIN restaurants rest ON rest.id = c.restaurant_id
+		WHERE c.customer_id = $1
+	`, customerID).Scan(&cartID, &restID, &couponID, &savedAddrID, &instructions, &restName, &restSlug, &zoneID, &packagingFee)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return &CartDTO{
 			Currency:  "INR",
@@ -100,14 +105,6 @@ func (r *Repository) GetCart(ctx context.Context, customerID string, addressID *
 		savedAddrID = addressID
 	}
 
-	var restName, restSlug, zoneID *string
-	var packagingFee int64
-	if restID != nil {
-		_ = r.pool.QueryRow(ctx, `
-			SELECT name, slug, service_zone_id, packaging_fee_minor FROM restaurants WHERE id = $1
-		`, *restID).Scan(&restName, &restSlug, &zoneID, &packagingFee)
-	}
-
 	rows, err := r.pool.Query(ctx, `
 		SELECT ci.id, ci.menu_item_id, mi.name, mi.image_url, mi.base_price_minor, ci.quantity
 		FROM cart_items ci
@@ -121,6 +118,7 @@ func (r *Repository) GetCart(ctx context.Context, customerID string, addressID *
 	defer rows.Close()
 
 	var items []CartItemDTO
+	var itemIDs []string
 	for rows.Next() {
 		var it CartItemDTO
 		if err := rows.Scan(&it.ID, &it.MenuItemID, &it.Name, &it.ImageURL, &it.UnitBasePriceMinor, &it.Quantity); err != nil {
@@ -128,40 +126,64 @@ func (r *Repository) GetCart(ctx context.Context, customerID string, addressID *
 		}
 		it.Customizations = []CartItemOptionDTO{}
 		items = append(items, it)
+		itemIDs = append(itemIDs, it.ID)
 	}
+
+	if len(items) == 0 {
+		instrStr := ""
+		if instructions != nil {
+			instrStr = *instructions
+		}
+		return &CartDTO{
+			RestaurantID:        restID,
+			RestaurantName:      restName,
+			RestaurantSlug:      restSlug,
+			Currency:            "INR",
+			Items:               []CartItemDTO{},
+			SpecialInstructions: instrStr,
+			Breakdown:           Breakdown{MinCartThresholdMinor: 29900},
+		}, nil
+	}
+
+	// Batch-load all customizations for all cart items in a single round-trip.
+	optsByItem := make(map[string][]CartItemOptionDTO, len(itemIDs))
+	optRows, oErr := r.pool.Query(ctx, `
+		SELECT cic.cart_item_id, mco.id, mcg.name, mco.name, mco.price_delta_minor
+		FROM cart_item_customizations cic
+		JOIN menu_customization_options mco ON mco.id = cic.option_id
+		JOIN menu_customization_groups mcg ON mcg.id = mco.group_id
+		WHERE cic.cart_item_id = ANY($1)
+	`, itemIDs)
+	if oErr != nil {
+		return nil, oErr
+	}
+	for optRows.Next() {
+		var ciID string
+		var opt CartItemOptionDTO
+		if sErr := optRows.Scan(&ciID, &opt.OptionID, &opt.GroupName, &opt.OptionName, &opt.PriceDeltaMinor); sErr != nil {
+			optRows.Close()
+			return nil, sErr
+		}
+		optsByItem[ciID] = append(optsByItem[ciID], opt)
+	}
+	optRows.Close()
 
 	var pricingLines []PricingLineItem
 	for idx := range items {
-		optRows, oErr := r.pool.Query(ctx, `
-			SELECT mco.id, mcg.name, mco.name, mco.price_delta_minor
-			FROM cart_item_customizations cic
-			JOIN menu_customization_options mco ON mco.id = cic.option_id
-			JOIN menu_customization_groups mcg ON mcg.id = mco.group_id
-			WHERE cic.cart_item_id = $1
-		`, items[idx].ID)
-		if oErr != nil {
-			return nil, oErr
-		}
+		opts := optsByItem[items[idx].ID]
 		var deltaSum int64
-		for optRows.Next() {
-			var opt CartItemOptionDTO
-			if sErr := optRows.Scan(&opt.OptionID, &opt.GroupName, &opt.OptionName, &opt.PriceDeltaMinor); sErr != nil {
-				optRows.Close()
-				return nil, sErr
-			}
+		for _, opt := range opts {
 			deltaSum += opt.PriceDeltaMinor
-			items[idx].Customizations = append(items[idx].Customizations, opt)
 		}
-		optRows.Close()
+		if opts != nil {
+			items[idx].Customizations = opts
+		}
 		items[idx].UnitCustomizationsPriceMinor = deltaSum
 		items[idx].LineTotalMinor = (items[idx].UnitBasePriceMinor + deltaSum) * int64(items[idx].Quantity)
 		pricingLines = append(pricingLines, PricingLineItem{
 			MenuItemID: items[idx].MenuItemID,
 			LineTotal:  items[idx].LineTotalMinor,
 		})
-	}
-	if items == nil {
-		items = []CartItemDTO{}
 	}
 
 	rules := r.loadPricingRules(ctx, zoneID)

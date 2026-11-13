@@ -153,7 +153,7 @@ export interface User {
 export interface CustomerAddress {
   id: string;
   userId: string;
-  label: "Home" | "Work" | "Other";
+  label: string;
   recipientName: string;
   recipientPhone: string;
   addressLine1: string;
@@ -303,6 +303,7 @@ export interface Restaurant {
   state: string;
   postalCode: string;
   location: GeoPoint;
+  distanceMeters?: number;
   maxDeliveryRadiusMeters: number;
   heroImageUrl: string;
   cardImageUrl: string;
@@ -500,6 +501,7 @@ export interface PaymentRecord {
     | "FAILED"
     | "REFUNDED"
     | "PARTIALLY_REFUNDED";
+  paymentMethod?: "ONLINE" | "COD";
   paymentInstrument?: string;
   failureMessage?: string;
   reconciledAt?: string;
@@ -556,8 +558,11 @@ export interface DeliveryPartner {
   documents?: {
     id: string;
     documentType: string;
+    fileKey?: string;
     status: "PENDING" | "VERIFIED" | "REJECTED";
   }[];
+  fileKey?: string;
+  documentType?: string;
 }
 
 export interface DeliveryOffer {
@@ -973,4 +978,24 @@ export interface AdminOutletDetail {
     permissions: string[];
     status: string;
   }[];
+}
+
+export type MediaCategory = "Menu" | "Verification";
+
+export interface PresignedMediaUploadResponse {
+  bucket: string;
+  category: MediaCategory;
+  outletId: string;
+  key: string;
+  uploadUrl: string;
+  viewUrl: string;
+  expiresInSeconds: number;
+}
+
+export interface PresignedMediaViewResponse {
+  key: string;
+  category: MediaCategory;
+  outletId: string;
+  viewUrl: string;
+  expiresInSeconds: number;
 }

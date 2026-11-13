@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useMyOrders, useSessionUser } from "@/hooks/useGoodlyQueries";
-import { formatMinor, formatOrderDate } from "@/lib/format";
+import { formatMinor, formatOrderDate, formatPaymentMode } from "@/lib/format";
 import { services } from "@/services";
 import type { ComplaintRecord, Order } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
@@ -141,6 +141,9 @@ export default function CustomerOrdersPage() {
                   </span>
                   <StatusBadge status={order.orderStatus} />
                   <StatusBadge status={order.paymentStatus} />
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#F5F0E2] text-[#1E1F1C]">
+                    {formatPaymentMode(order.paymentMethod)}
+                  </span>
                 </div>
                 <h2 className="text-lg font-bold text-[#1E1F1C]">
                   {order.restaurantName}

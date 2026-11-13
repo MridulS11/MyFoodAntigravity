@@ -79,6 +79,7 @@ func (h *Handler) RegisterRoutes(v1 *gin.RouterGroup) {
 		grp.POST("/orders/:orderId/stage", h.updateDeliveryStage)
 		grp.PATCH("/orders/:orderId/stage", h.updateDeliveryStage)
 		grp.POST("/orders/:orderId/location", h.pingLocation)
+		grp.GET("/history", h.listDeliveryHistory)
 		grp.GET("/earnings", h.listEarnings)
 	}
 }

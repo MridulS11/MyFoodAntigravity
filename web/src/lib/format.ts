@@ -50,6 +50,19 @@ export function formatOrderDate(iso: string): string {
   }).format(new Date(iso));
 }
 
+export function formatPaymentMode(
+  paymentMethod?: "ONLINE" | "COD" | string,
+  paymentInstrument?: string
+): string {
+  if (paymentMethod === "COD") return "Cash on Delivery (COD)";
+  if (paymentInstrument) {
+    const clean = paymentInstrument.replaceAll("_", " ").toUpperCase();
+    return paymentMethod === "ONLINE" ? `Online · ${clean}` : clean;
+  }
+  if (paymentMethod === "ONLINE") return "Online";
+  return "—";
+}
+
 export function generateOrderNumber(): string {
   const now = new Date();
   const y = now.getUTCFullYear();

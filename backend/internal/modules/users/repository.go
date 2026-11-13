@@ -3,10 +3,12 @@ package users
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/MridulS11/MyFoodAntigravity/backend/internal/platform/database"
@@ -14,6 +16,7 @@ import (
 
 var (
 	ErrAddressNotFoundOrForbidden = errors.New("address not found or access denied")
+	ErrDuplicateAddressLabel      = errors.New("an address with this tag already exists")
 )
 
 // CustomerProfile represents GET /api/v1/customers/me payload.
@@ -185,6 +188,7 @@ func (r *Repository) ListAddresses(ctx context.Context, userID string) ([]Custom
 // CreateAddress inserts a saved customer address using PostGIS ST_MakePoint and evaluates serviceability.
 func (r *Repository) CreateAddress(ctx context.Context, userID string, in CreateAddressInput) (*CustomerAddress, error) {
 	addrID := uuid.NewString()
+	label := strings.TrimSpace(in.Label)
 	country := in.CountryCode
 	if country == "" {
 		country = "IN"
@@ -192,6 +196,19 @@ func (r *Repository) CreateAddress(ctx context.Context, userID string, in Create
 
 	var out CustomerAddress
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM customer_addresses
+				WHERE user_id = $1 AND is_archived = FALSE AND LOWER(btrim(label)) = LOWER($2)
+			)
+		`, userID, label).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return ErrDuplicateAddressLabel
+		}
+
 		if in.IsDefault {
 			if _, err := tx.Exec(ctx, `UPDATE customer_addresses SET is_default = FALSE WHERE user_id = $1`, userID); err != nil {
 				return err
@@ -218,7 +235,7 @@ func (r *Repository) CreateAddress(ctx context.Context, userID string, in Create
 			              WHERE sz.is_active = TRUE AND ST_Covers(sz.boundary, location)
 			          ),
 			          created_at
-		`, addrID, userID, in.Label, in.RecipientName, in.RecipientPhone,
+		`, addrID, userID, label, in.RecipientName, in.RecipientPhone,
 			in.AddressLine1, in.AddressLine2, in.Landmark, in.City, in.State,
 			in.PostalCode, country, in.DeliveryInstructions, in.Lng, in.Lat, in.IsDefault,
 		).Scan(
@@ -227,6 +244,10 @@ func (r *Repository) CreateAddress(ctx context.Context, userID string, in Create
 			&out.PostalCode, &out.CountryCode, &out.DeliveryInstructions,
 			&out.Lat, &out.Lng, &out.IsDefault, &out.IsServiceable, &out.CreatedAt,
 		); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return ErrDuplicateAddressLabel
+			}
 			return err
 		}
 

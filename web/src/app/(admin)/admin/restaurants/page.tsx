@@ -155,14 +155,38 @@ function AdminRestaurantsContent() {
                   </span>
                   <StatusBadge status={owner.verificationStatus} />
                 </div>
-                <div className="p-2.5 rounded-xl bg-[#FCF9F0] border border-[#E8E3D5] flex justify-between gap-2">
+                <div className="p-2.5 rounded-xl bg-[#FCF9F0] border border-[#E8E3D5] flex items-center justify-between gap-2">
                   <span className="truncate">
-                    <strong>Demo ID Upload:</strong>{" "}
+                    <strong>Verification Doc:</strong>{" "}
                     {owner.idDocumentFilename || "demo-id-uploaded.pdf"}
                   </span>
-                  <span className="text-[10px] uppercase font-bold text-[#5F8E63] shrink-0">
-                    Attached
-                  </span>
+                  {owner.idDocumentFilename?.startsWith("Verification/") ||
+                  owner.idDocumentFilename?.startsWith("Menu/") ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!services.adminPortal.presignMediaView) return;
+                          const res = await services.adminPortal.presignMediaView(
+                            owner.idDocumentFilename!
+                          );
+                          window.open(res.viewUrl, "_blank", "noopener,noreferrer");
+                        } catch (err) {
+                          pushToast(
+                            "error",
+                            err instanceof Error ? err.message : "Could not open document."
+                          );
+                        }
+                      }}
+                      className="text-[11px] font-bold text-[#2F5934] hover:underline shrink-0"
+                    >
+                      View Document
+                    </button>
+                  ) : (
+                    <span className="text-[10px] uppercase font-bold text-[#5F8E63] shrink-0">
+                      Attached
+                    </span>
+                  )}
                 </div>
               </div>
 

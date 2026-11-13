@@ -9,6 +9,7 @@ import { BrooklynMap } from "@/components/shared/BrooklynMap";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useTrackingSnapshot } from "@/hooks/useGoodlyQueries";
 import { services } from "@/services";
+import type { Order } from "@/services/contracts/types";
 import { useAppStore } from "@/stores/useAppStore";
 
 export default function ActiveDeliveryPage() {
@@ -30,6 +31,7 @@ export default function ActiveDeliveryPage() {
   const { data: tracking } = useTrackingSnapshot(orderId);
   const [pinInput, setPinInput] = useState("");
   const [simStep, setSimStep] = useState(0);
+  const [updatingStage, setUpdatingStage] = useState(false);
 
   if (isLoading || !order) {
     return <div className="text-sm text-[#8A8880]">Loading active delivery...</div>;
@@ -43,21 +45,41 @@ export default function ActiveDeliveryPage() {
       | "ARRIVED_AT_CUSTOMER"
       | "DELIVERED"
   ) {
+    if (!order || updatingStage) return;
+    const previousOrder = qc.getQueryData<Order>(["deliveryOrder", order.id]);
+    setUpdatingStage(true);
+
+    // Optimistic transition for non-OTP stages; DELIVERED waits for server OTP verification.
+    if (nextStatus !== "DELIVERED") {
+      qc.setQueryData<Order>(["deliveryOrder", order.id], (old) =>
+        old ? { ...old, deliveryStatus: nextStatus } : old
+      );
+    }
+
     try {
-      await services.deliveryPortal.updateDeliveryProgress(
-        order!.id,
+      const updated = await services.deliveryPortal.updateDeliveryProgress(
+        order.id,
         nextStatus,
         nextStatus === "DELIVERED" ? pinInput.trim() : undefined
       );
-      await qc.invalidateQueries();
+      qc.setQueryData<Order>(["deliveryOrder", order.id], updated);
       if (nextStatus === "DELIVERED") {
+        void qc.invalidateQueries({ queryKey: ["deliveryHistoryEarnings"] });
+        void qc.invalidateQueries({ queryKey: ["activeDelivery"] });
         pushToast("success", "Delivery confirmed and earnings credited!");
         router.push("/delivery/earnings");
       } else {
+        void qc.invalidateQueries({ queryKey: ["deliveryOrder", order.id] });
         pushToast("success", `Updated status to ${nextStatus.replaceAll("_", " ")}`);
       }
     } catch (err) {
+      if (previousOrder !== undefined) {
+        qc.setQueryData(["deliveryOrder", order.id], previousOrder);
+      }
+      void qc.invalidateQueries({ queryKey: ["deliveryOrder", order.id] });
       pushToast("error", err instanceof Error ? err.message : "Update failed.");
+    } finally {
+      setUpdatingStage(false);
     }
   }
 
@@ -162,10 +184,11 @@ export default function ActiveDeliveryPage() {
           <button
             type="button"
             data-testid="btn-arrived-restaurant"
+            disabled={updatingStage}
             onClick={() => handleStage("ARRIVED_AT_RESTAURANT")}
-            className="w-full py-3.5 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] font-extrabold text-sm"
+            className="w-full py-3.5 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] font-extrabold text-sm disabled:opacity-50"
           >
-            Confirm Arrived at Restaurant
+            {updatingStage ? "Updating..." : "Confirm Arrived at Restaurant"}
           </button>
         )}
 
@@ -173,10 +196,11 @@ export default function ActiveDeliveryPage() {
           <button
             type="button"
             data-testid="btn-picked-up"
+            disabled={updatingStage}
             onClick={() => handleStage("PICKED_UP")}
-            className="w-full py-3.5 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] font-extrabold text-sm"
+            className="w-full py-3.5 rounded-xl bg-[#DEC146] hover:bg-[#CFAF32] font-extrabold text-sm disabled:opacity-50"
           >
-            Confirm Order Picked Up
+            {updatingStage ? "Updating..." : "Confirm Order Picked Up"}
           </button>
         )}
 
@@ -184,10 +208,11 @@ export default function ActiveDeliveryPage() {
           <button
             type="button"
             data-testid="btn-out-for-delivery"
+            disabled={updatingStage}
             onClick={() => handleStage("OUT_FOR_DELIVERY")}
-            className="w-full py-3.5 rounded-xl bg-[#1E1F1C] text-[#FCF9F0] font-extrabold text-sm"
+            className="w-full py-3.5 rounded-xl bg-[#1E1F1C] text-[#FCF9F0] font-extrabold text-sm disabled:opacity-50"
           >
-            Start Navigation to Customer
+            {updatingStage ? "Updating..." : "Start Navigation to Customer"}
           </button>
         )}
 
@@ -195,10 +220,11 @@ export default function ActiveDeliveryPage() {
           <button
             type="button"
             data-testid="btn-arrived-customer"
+            disabled={updatingStage}
             onClick={() => handleStage("ARRIVED_AT_CUSTOMER")}
-            className="w-full py-3.5 rounded-xl bg-[#CBEAD0] font-extrabold text-sm"
+            className="w-full py-3.5 rounded-xl bg-[#CBEAD0] font-extrabold text-sm disabled:opacity-50"
           >
-            Confirm Arrived at Customer Location
+            {updatingStage ? "Updating..." : "Confirm Arrived at Customer Location"}
           </button>
         )}
 
@@ -233,11 +259,12 @@ export default function ActiveDeliveryPage() {
             <button
               type="button"
               data-testid="btn-complete-delivery"
+              disabled={updatingStage}
               onClick={() => handleStage("DELIVERED")}
-              className="w-full py-3.5 rounded-xl bg-[#5F8E63] hover:bg-[#4e7a52] text-white font-extrabold text-sm flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-[#5F8E63] hover:bg-[#4e7a52] text-white font-extrabold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Complete Delivery</span>
+              <span>{updatingStage ? "Verifying & completing..." : "Complete Delivery"}</span>
             </button>
           </div>
         )}

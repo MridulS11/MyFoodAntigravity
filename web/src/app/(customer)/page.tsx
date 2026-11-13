@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Clock,
   Heart,
+  MapPin,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -17,6 +18,7 @@ import {
   useToggleFavorite,
 } from "@/hooks/useGoodlyQueries";
 import { formatDeliveryFeeLabel } from "@/lib/format";
+import { formatDistance, haversineDistanceMeters } from "@/lib/geo";
 import { CATEGORY_PILLS } from "@/services/mocks/seedData";
 import { useAppStore } from "@/stores/useAppStore";
 
@@ -179,6 +181,23 @@ export default function CustomerDiscoveryPage() {
                 </span>
                 <span className="text-[#D5CEBC]">·</span>
                 <span className="text-[#5E5D57]">{spotlight.cuisines[0]}</span>
+                {formatDistance(
+                  spotlight.distanceMeters ??
+                    haversineDistanceMeters(activePoint, spotlight.location)
+                ) && (
+                  <>
+                    <span className="text-[#D5CEBC]">·</span>
+                    <span className="inline-flex items-center gap-1 text-[#5E5D57]">
+                      <MapPin className="w-3.5 h-3.5 text-[#5F8E63]" />
+                      <span>
+                        {formatDistance(
+                          spotlight.distanceMeters ??
+                            haversineDistanceMeters(activePoint, spotlight.location)
+                        )}
+                      </span>
+                    </span>
+                  </>
+                )}
               </div>
 
               <div className="pt-1 space-y-2.5">
@@ -413,6 +432,18 @@ export default function CustomerDiscoveryPage() {
                               rest.currency
                             )}
                           </span>
+                          {formatDistance(
+                            rest.distanceMeters ??
+                              haversineDistanceMeters(activePoint, rest.location)
+                          ) && (
+                            <span className="inline-flex items-center gap-1 text-[#5E5D57]">
+                              <MapPin className="w-3 h-3 text-[#5F8E63]" />
+                              {formatDistance(
+                                rest.distanceMeters ??
+                                  haversineDistanceMeters(activePoint, rest.location)
+                              )}
+                            </span>
+                          )}
                         </div>
                       </Link>
                     </article>

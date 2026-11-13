@@ -32,7 +32,11 @@ export const otpSchema = z.object({
 });
 
 export const addressSchema = z.object({
-  label: z.enum(["Home", "Work", "Other"]),
+  label: z
+    .string()
+    .trim()
+    .min(1, "Location tag is required")
+    .max(50, "Location tag must be 50 characters or less"),
   recipientName: z.string().trim().min(2, "Recipient name is required"),
   recipientPhone: z.string().trim().min(8, "Recipient phone is required"),
   addressLine1: z.string().trim().min(4, "Street address is required"),

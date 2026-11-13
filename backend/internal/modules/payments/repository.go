@@ -44,6 +44,7 @@ type PaymentDTO struct {
 	AmountMinor       int64      `json:"amount_minor"`
 	Currency          string     `json:"currency"`
 	Status            string     `json:"status"`
+	PaymentMethod     string     `json:"payment_method"`
 	PaymentInstrument *string    `json:"payment_instrument,omitempty"`
 	FailureMessage    *string    `json:"failure_message,omitempty"`
 	ReconciledAt      *time.Time `json:"reconciled_at,omitempty"`
@@ -62,6 +63,7 @@ type AdminPaymentDTO struct {
 	AmountMinor       int64      `json:"amount_minor"`
 	Currency          string     `json:"currency"`
 	Status            string     `json:"status"`
+	PaymentMethod     string     `json:"payment_method"`
 	PaymentInstrument *string    `json:"payment_instrument,omitempty"`
 	FailureMessage    *string    `json:"failure_message,omitempty"`
 	ReconciledAt      *time.Time `json:"reconciled_at,omitempty"`
@@ -617,7 +619,7 @@ func (r *Repository) ListAdminPaymentsAndRefunds(ctx context.Context) ([]AdminPa
 	pRows, err := r.pool.Query(ctx, `
 		SELECT p.id, p.order_id, o.order_number, p.customer_id, p.provider,
 		       p.provider_order_id, p.provider_payment_id, p.amount_minor, p.currency,
-		       p.status, p.payment_instrument, p.failure_message, p.reconciled_at, p.created_at
+		       p.status, o.payment_method, p.payment_instrument, p.failure_message, p.reconciled_at, p.created_at
 		FROM payments p
 		JOIN orders o ON o.id = p.order_id
 		ORDER BY p.created_at DESC
@@ -634,7 +636,7 @@ func (r *Repository) ListAdminPaymentsAndRefunds(ctx context.Context) ([]AdminPa
 		if err := pRows.Scan(
 			&p.ID, &p.OrderID, &p.OrderNumber, &p.CustomerID, &p.Provider,
 			&p.ProviderOrderID, &p.ProviderPaymentID, &p.AmountMinor, &p.Currency,
-			&p.Status, &p.PaymentInstrument, &p.FailureMessage, &p.ReconciledAt, &p.CreatedAt,
+			&p.Status, &p.PaymentMethod, &p.PaymentInstrument, &p.FailureMessage, &p.ReconciledAt, &p.CreatedAt,
 		); err != nil {
 			return nil, nil, err
 		}

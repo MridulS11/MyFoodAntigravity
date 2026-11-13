@@ -1,13 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { uploadMediaWithPresign } from "@/lib/mediaUpload";
 import { deliveryOnboardingSchema } from "@/lib/validators/schemas";
 import { services } from "@/services";
 import { useAppStore } from "@/stores/useAppStore";
@@ -18,6 +20,8 @@ export default function DeliveryOnboardingPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const pushToast = useAppStore((s) => s.pushToast);
+  const [docFileKey, setDocFileKey] = useState("");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const { data: partner } = useQuery({
     queryKey: ["myPartnerProfile"],
@@ -34,7 +38,11 @@ export default function DeliveryOnboardingPage() {
   });
 
   async function onSubmit(values: DeliveryOnboardingValues) {
-    await services.deliveryPortal.submitOnboarding(values);
+    await services.deliveryPortal.submitOnboarding({
+      ...values,
+      documentType: "DRIVING_LICENSE",
+      fileKey: docFileKey || undefined,
+    });
     await qc.invalidateQueries({ queryKey: ["myPartnerProfile"] });
     pushToast("success", "Courier KYC application submitted for Admin review.");
   }
@@ -128,6 +136,47 @@ export default function DeliveryOnboardingPage() {
             placeholder="e.g. NY-EV-402"
             className="w-full border border-[#E8E3D5] rounded-xl px-3 py-2 text-xs"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">
+            Driving License / ID Document (Verification/Rider)
+          </label>
+          <label className="inline-flex w-full items-center gap-2 border border-dashed border-[#C7C1B2] rounded-xl px-3 py-2 text-xs cursor-pointer hover:bg-[#FCF9F0]">
+            <Upload className="w-3.5 h-3.5 text-[#5F8E63] shrink-0" />
+            <span className="truncate text-[#5E5D57]">
+              {uploadingDoc
+                ? "Uploading to R2..."
+                : docFileKey || "Choose driving license / ID (PDF, PNG, JPG)..."}
+            </span>
+            <input
+              type="file"
+              data-testid="rider-id-file-input"
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              disabled={uploadingDoc}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                setUploadingDoc(true);
+                try {
+                  const res = await uploadMediaWithPresign(services.deliveryPortal, {
+                    category: "Verification",
+                    file: f,
+                  });
+                  setDocFileKey(res.key);
+                  pushToast("success", "Rider verification document uploaded to R2.");
+                } catch (err) {
+                  pushToast(
+                    "error",
+                    err instanceof Error ? err.message : "Document upload failed."
+                  );
+                } finally {
+                  setUploadingDoc(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button

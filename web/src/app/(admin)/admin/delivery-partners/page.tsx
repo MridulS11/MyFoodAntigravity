@@ -63,6 +63,33 @@ export default function AdminDeliveryPartnersPage() {
                 {p.vehicleModel} ({p.vehicleType}) · Plate: {p.licensePlate} ·{" "}
                 {p.phone}
               </p>
+              {p.fileKey && (
+                <div className="flex items-center gap-2 text-xs text-[#5E5D57]">
+                  <span className="truncate max-w-xs">
+                    Doc: <strong>{p.documentType || "DRIVING_LICENSE"}</strong> ({p.fileKey})
+                  </span>
+                  {p.fileKey.startsWith("Verification/") && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!services.adminPortal.presignMediaView) return;
+                          const res = await services.adminPortal.presignMediaView(p.fileKey!);
+                          window.open(res.viewUrl, "_blank", "noopener,noreferrer");
+                        } catch (err) {
+                          pushToast(
+                            "error",
+                            err instanceof Error ? err.message : "Could not open document."
+                          );
+                        }
+                      }}
+                      className="text-[11px] font-bold text-[#2F5934] hover:underline shrink-0"
+                    >
+                      View Document
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

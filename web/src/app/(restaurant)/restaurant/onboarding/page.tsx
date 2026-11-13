@@ -9,7 +9,9 @@ import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { GoogleMapPicker } from "@/components/shared/GoogleMapPicker";
 import { useSessionUser } from "@/hooks/useGoodlyQueries";
+import { uploadMediaWithPresign } from "@/lib/mediaUpload";
 import { restaurantOnboardingSchema } from "@/lib/validators/schemas";
 import { services } from "@/services";
 import type { RestaurantOwnerProfile } from "@/services/contracts/types";
@@ -20,6 +22,7 @@ type OnboardingValues = z.infer<typeof restaurantOnboardingSchema>;
 function RestaurantOnboardingInner() {
   const qc = useQueryClient();
   const pushToast = useAppStore((s) => s.pushToast);
+  const [outletLocation, setOutletLocation] = useState({ lat: 12.9784, lng: 77.6408 });
   const searchParams = useSearchParams();
   const { data: user } = useSessionUser("restaurant");
   const isOwnerRole = Boolean(
@@ -47,6 +50,7 @@ function RestaurantOnboardingInner() {
     useState<RestaurantOwnerProfile["idDocumentType"]>("PAN_CARD");
   const [idDocNumber, setIdDocNumber] = useState("");
   const [idDocFilename, setIdDocFilename] = useState("");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const { data: ownerProfile } = useQuery({
     queryKey: ["ownerProfile", user?.id],
@@ -164,6 +168,8 @@ function RestaurantOnboardingInner() {
         branchName: resolvedBranch,
         serviceZoneId: serviceZoneId || zones[0]?.id,
         cuisines: values.cuisines.split(",").map((s) => s.trim()),
+        lat: outletLocation.lat,
+        lng: outletLocation.lng,
       });
       await qc.invalidateQueries();
       form.reset();
@@ -439,16 +445,40 @@ function RestaurantOnboardingInner() {
                       <label className="flex-1 inline-flex items-center gap-2 border border-dashed border-[#C7C1B2] rounded-xl px-3 py-2 text-xs cursor-pointer hover:bg-[#FCF9F0]">
                         <Upload className="w-3.5 h-3.5 text-[#5F8E63] shrink-0" />
                         <span className="truncate text-[#5E5D57]">
-                          {idDocFilename || "Choose ID image / PDF..."}
+                          {uploadingDoc
+                            ? "Uploading to R2..."
+                            : idDocFilename || "Choose ID image / PDF..."}
                         </span>
                         <input
                           type="file"
                           data-testid="owner-id-file-input"
                           className="hidden"
-                          accept=".pdf,.png,.jpg,.jpeg"
-                          onChange={(e) => {
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                          disabled={uploadingDoc}
+                          onChange={async (e) => {
                             const f = e.target.files?.[0];
-                            if (f) setIdDocFilename(f.name);
+                            if (!f) return;
+                            setUploadingDoc(true);
+                            try {
+                              const res = await uploadMediaWithPresign(services.restaurantPortal, {
+                                category: "Verification",
+                                outletId: outlets[0]?.id,
+                                file: f,
+                              });
+                              setIdDocFilename(res.key);
+                              pushToast("success", "Verification document uploaded to R2.");
+                            } catch (err) {
+                              setIdDocFilename(f.name);
+                              pushToast(
+                                "error",
+                                err instanceof Error
+                                  ? `${err.message} (kept filename locally)`
+                                  : "Upload failed."
+                              );
+                            } finally {
+                              setUploadingDoc(false);
+                              e.target.value = "";
+                            }
                           }}
                         />
                       </label>
@@ -681,6 +711,29 @@ function RestaurantOnboardingInner() {
               <input
                 {...form.register("licenseNumber")}
                 className="w-full border border-[#E8E3D5] rounded-xl px-3 py-2 text-xs"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <GoogleMapPicker
+                value={outletLocation}
+                onChange={setOutletLocation}
+                onAddressResolved={(fields) => {
+                  if (fields.addressLine1) {
+                    form.setValue("addressLine1", fields.addressLine1, { shouldValidate: true });
+                  }
+                  if (fields.city) {
+                    form.setValue("city", fields.city, { shouldValidate: true });
+                  }
+                  if (fields.state) {
+                    form.setValue("state", fields.state, { shouldValidate: true });
+                  }
+                  if (fields.postalCode) {
+                    form.setValue("postalCode", fields.postalCode, { shouldValidate: true });
+                  }
+                }}
+                heightClassName="h-[220px]"
+                label="Pin exact outlet location on map"
+                helperText="Customers see distances and delivery availability calculated from this pin."
               />
             </div>
             <div className="sm:col-span-2">

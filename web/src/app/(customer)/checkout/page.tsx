@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { OrderChargesBreakdown } from "@/components/customer/OrderChargesBreakdown";
 import { useAddresses, useCart, useSessionUser } from "@/hooks/useGoodlyQueries";
 import { formatMinor } from "@/lib/format";
 import { services } from "@/services";
@@ -134,16 +135,15 @@ export default function CheckoutPage() {
     }
     setSubmitting(true);
     try {
-      await services.cart.setSpecialInstructions(instructions);
-      const validation = await services.cart.validateCheckout(selectedAddress.id);
-
       if (paymentMethod === "COD") {
         const { order } = await services.orders.createOrder({
           deliveryAddressId: selectedAddress.id,
           paymentMethod: "COD",
-          pricingQuoteHash: validation.pricingQuoteHash,
+          pricingQuoteHash: "authoritative",
           idempotencyKey,
+          specialInstructions: instructions,
         });
+        qc.setQueryData(["orderDetail", order.id], order);
         pushToast("success", `Order ${order.orderNumber} confirmed (Cash on Delivery)!`);
         router.push(`/orders/${order.id}/track`);
         void qc.invalidateQueries({ queryKey: ["cart"] });
@@ -151,16 +151,17 @@ export default function CheckoutPage() {
         return;
       }
 
-      // ONLINE payment: create PENDING_PAYMENT order + gateway session, then simulate interactive payment step
+      // ONLINE payment: create PENDING_PAYMENT order + gateway session in a single hop
       const { order, payment } = await services.orders.createOrder({
         deliveryAddressId: selectedAddress.id,
         paymentMethod: "ONLINE",
-        pricingQuoteHash: validation.pricingQuoteHash,
+        pricingQuoteHash: "authoritative",
         idempotencyKey,
+        specialInstructions: instructions,
         deferOnlineCapture: true,
       });
 
-      await qc.invalidateQueries({ queryKey: ["myOrders"] });
+      void qc.invalidateQueries({ queryKey: ["myOrders"] });
       setGatewaySession({ order, payment });
     } catch (err) {
       pushToast(
@@ -183,15 +184,16 @@ export default function CheckoutPage() {
             outcome,
             outcome === "FAIL"
               ? `Simulated ${simInstrument} authorization decline`
-              : undefined
+              : undefined,
+            targetOrder
           )
         : outcome === "CAPTURE"
           ? await services.orders.retryPayment(targetOrder.id)
           : { order: targetOrder, payment: { ...gatewaySession.payment, status: "FAILED" as const } };
 
       if (outcome === "FAIL" || result.payment.status === "FAILED") {
-        await qc.invalidateQueries({ queryKey: ["cart"] });
-        await qc.invalidateQueries({ queryKey: ["myOrders"] });
+        void qc.invalidateQueries({ queryKey: ["cart"] });
+        void qc.invalidateQueries({ queryKey: ["myOrders"] });
         setFailedOrderId(result.order.id);
         setGatewaySession(null);
         pushToast(
@@ -201,6 +203,7 @@ export default function CheckoutPage() {
       } else {
         setFailedOrderId(null);
         setGatewaySession(null);
+        qc.setQueryData(["orderDetail", result.order.id], result.order);
         pushToast(
           "success",
           `Payment captured via ${simInstrument}! Order ${result.order.orderNumber} confirmed.`
@@ -528,74 +531,12 @@ export default function CheckoutPage() {
             ))}
           </div>
 
-          <div className="space-y-2 text-xs text-[#5E5D57]">
-            <div className="flex justify-between">
-              <span>Item subtotal</span>
-              <span className="tabular-nums font-medium text-[#1E1F1C]">
-                {formatMinor(cart.breakdown.itemSubtotalMinor, cart.currency)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Packaging fee</span>
-              <span className="tabular-nums">
-                {formatMinor(cart.breakdown.packagingFeeMinor, cart.currency)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Delivery fee</span>
-              <span className="tabular-nums">
-                {cart.breakdown.deliveryFeeMinor === 0
-                  ? "FREE"
-                  : formatMinor(cart.breakdown.deliveryFeeMinor, cart.currency)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Platform fee</span>
-              <span className="tabular-nums">
-                {formatMinor(cart.breakdown.platformFeeMinor, cart.currency)}
-              </span>
-            </div>
-            {(cart.breakdown.smallCartFeeMinor ?? 0) > 0 && (
-              <div
-                data-testid="small-cart-fee-row"
-                className="flex justify-between text-[#92400E] font-medium"
-              >
-                <span>Small-cart fee (below min cart threshold)</span>
-                <span className="tabular-nums">
-                  {formatMinor(cart.breakdown.smallCartFeeMinor!, cart.currency)}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span>GST (5%)</span>
-              <span className="tabular-nums">
-                {formatMinor(cart.breakdown.taxAmountMinor, cart.currency)}
-              </span>
-            </div>
-            {cart.breakdown.tipAmountMinor > 0 && (
-              <div className="flex justify-between">
-                <span>Rider tip</span>
-                <span className="tabular-nums">
-                  {formatMinor(cart.breakdown.tipAmountMinor, cart.currency)}
-                </span>
-              </div>
-            )}
-            {cart.breakdown.discountAmountMinor > 0 && (
-              <div className="flex justify-between text-[#2E7D32] font-semibold">
-                <span>Promo discount</span>
-                <span className="tabular-nums">
-                  −{formatMinor(cart.breakdown.discountAmountMinor, cart.currency)}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-[#E8E3D5] pt-4 flex items-center justify-between text-base font-extrabold text-[#1E1F1C]">
-            <span>Total payable</span>
-            <span data-testid="checkout-total" className="tabular-nums">
-              {formatMinor(cart.breakdown.totalPayableMinor, cart.currency)}
-            </span>
-          </div>
+          <OrderChargesBreakdown
+            breakdown={cart.breakdown}
+            currency={cart.currency}
+            totalLabel="Total payable"
+            totalTestId="checkout-total"
+          />
 
           <button
             type="button"
