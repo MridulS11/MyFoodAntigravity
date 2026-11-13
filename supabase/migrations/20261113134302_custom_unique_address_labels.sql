@@ -3,6 +3,9 @@ ALTER TABLE customer_addresses
     DROP CONSTRAINT IF EXISTS customer_addresses_label_check;
 
 ALTER TABLE customer_addresses
+    DROP CONSTRAINT IF EXISTS customer_addresses_label_nonempty;
+
+ALTER TABLE customer_addresses
     ADD CONSTRAINT customer_addresses_label_nonempty
     CHECK (char_length(btrim(label)) > 0);
 
